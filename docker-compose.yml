@@ -1,0 +1,36 @@
+version: "3"
+
+services:
+  server:
+    build: ./server
+    ports:
+      - "8000:8000"
+    environment:
+      - LOG_LEVEL=INFO
+      - LOG_TO_FILE=false
+      # - LOG_FILE=/app/logs/server.log  # LOG_TO_FILE=trueの場合に使用
+    # volumes:
+    #   - ./logs:/app/logs  # LOG_TO_FILE=trueの場合にコメントを解除
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "200k"
+        max-file: "10"
+
+  client:
+    build: ./client
+    depends_on:
+      - server
+    environment:
+      #      - SERVER_URL=ws://server:8000/ws
+      - SERVER_URL=ws://dev01-miraikan-dashboard-webapp.azurewebsites.net/ws
+      - LOG_LEVEL=INFO
+      - LOG_TO_FILE=false
+      # - LOG_FILE=/app/logs/robot.log  # LOG_TO_FILE=trueの場合に使用
+    # volumes:
+    #   - ./logs:/app/logs  # LOG_TO_FILE=trueの場合にコメントを解除
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "200k"
+        max-file: "10"

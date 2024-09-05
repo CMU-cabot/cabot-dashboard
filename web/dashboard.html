@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ダッシュボード</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f0f0f0;
+        }
+        #dashboard {
+            background-color: white;
+            border-radius: 5px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        #messages {
+            height: 300px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            padding: 10px;
+            margin-bottom: 20px;
+        }
+        .status {
+            margin-bottom: 5px;
+        }
+        .error {
+            color: red;
+        }
+    </style>
+</head>
+<body>
+    <div id="dashboard">
+        <h1>ロボットダッシュボード</h1>
+        <div id="messages"></div>
+        <div id="connection-status">接続状態: 切断</div>
+    </div>
+
+    <script>
+        const messagesDiv = document.getElementById('messages');
+        const connectionStatus = document.getElementById('connection-status');
+        let socket;
+
+        function connect() {
+//            socket = new WebSocket('ws://localhost:8000/ws/dashboard');
+            socket = new WebSocket('ws://dev01-miraikan-dashboard-webapp.azurewebsites.net/ws/dashboard');
+            socket.onopen = function(e) {
+                console.log("接続が確立されました");
+                connectionStatus.textContent = '接続状態: 接続済み';
+                addMessage("サーバーに接続しました", "status");
+            };
+
+            socket.onmessage = function(event) {
+                addMessage(event.data, "status");
+            };
+
+            socket.onclose = function(event) {
+                if (event.wasClean) {
+                    console.log(`接続がクリーンに閉じられました, コード=${event.code} 理由=${event.reason}`);
+                } else {
+                    console.log('接続が中断されました');
+                }
+                connectionStatus.textContent = '接続状態: 切断';
+                addMessage("サーバーとの接続が切断されました", "error");
+                setTimeout(connect, 5000);
+            };
+
+            socket.onerror = function(error) {
+                console.log(`エラー: ${error.message}`);
+                addMessage(`エラーが発生しました: ${error.message}`, "error");
+            };
+        }
+
+        function addMessage(message, type) {
+            const messageElement = document.createElement('div');
+            messageElement.textContent = message;
+            messageElement.className = type;
+            messagesDiv.appendChild(messageElement);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        connect();
+    </script>
+</body>
+</html>
