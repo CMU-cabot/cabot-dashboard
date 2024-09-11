@@ -14,7 +14,8 @@ def setup_logger():
     logger.handlers.clear()
 
     log_to_file = os.environ.get('CABOT_DASHBOARD_LOG_TO_FILE', 'false').lower() == 'true'
-    handler = logging.FileHandler(os.environ.get('CABOT_DASHBOARD_LOG_FILE', 'cabot.log')) if log_to_file else logging.StreamHandler()
+    log_file = os.environ.get('CABOT_DASHBOARD_LOG_FILE', 'cabot.log')
+    handler = logging.FileHandler(log_file) if log_to_file else logging.StreamHandler()
 
     handler.setFormatter(logging.Formatter(log_format, date_format))
     logger.addHandler(handler)
@@ -31,33 +32,37 @@ class CabotDashboardClient:
         self.max_retries = 5
         self.retry_delay = 5  # seconds
         self.polling_interval = int(os.environ.get("CABOT_DASHBOARD_POLLING_INTERVAL", "1"))
+        self.command_queue = asyncio.Queue()
+        self.state_update_event = asyncio.Event()
+
+    async def _make_request(self, session, method, endpoint, data=None):
+        headers = {"X-API-Key": self.api_key}
+        url = f"{self.base_url}/{endpoint}"
+        try:
+            async with getattr(session, method)(url, headers=headers, json=data) as response:
+                return response.status, await response.json() if response.status == 200 else None
+        except ClientError as e:
+            logger.error(f"CabotDashboardClient {self.cabot_id}: Request error: {e}")
+            return None, None
 
     async def send_status(self, session, status):
-        headers = {"X-API-Key": self.api_key}
-        try:
-            async with session.post(f"{self.base_url}/send/{self.cabot_id}", headers=headers, json={"message": status}) as response:
-                if response.status != 200:
-                    logger.warning(f"CabotDashboardClient {self.cabot_id}: Failed to send status")
-        except ClientError as e:
-            logger.error(f"CabotDashboardClient {self.cabot_id}: Failed to send status: {e}")
+        status_code, _ = await self._make_request(session, 'post', f"send/{self.cabot_id}", {"message": status})
+        if status_code == 200:
+            logger.info(f"CabotDashboardClient {self.cabot_id}: Status sent successfully: {status}")
+        else:
+            logger.warning(f"CabotDashboardClient {self.cabot_id}: Failed to send status. Status code: {status_code}")
 
     async def connect(self, session):
-        headers = {"X-API-Key": self.api_key}
         for attempt in range(self.max_retries):
-            try:
-                async with session.post(f"{self.base_url}/connect/{self.cabot_id}", headers=headers) as response:
-                    if response.status == 200:
-                        logger.info(f"CabotDashboardClient {self.cabot_id}: Connected to server")
-                        return True
-                    elif response.status == 403:
-                        logger.error(f"CabotDashboardClient {self.cabot_id}: Authentication failed. Check API key.")
-                        return False
-                    else:
-                        logger.error(f"CabotDashboardClient {self.cabot_id}: Failed to connect. Status: {response.status}")
-            except (ClientConnectorError, ServerDisconnectedError, ClientError) as e:
-                logger.error(f"CabotDashboardClient {self.cabot_id}: Connection error: {e}. Retrying in {self.retry_delay} seconds...")
-            except Exception as e:
-                logger.error(f"CabotDashboardClient {self.cabot_id}: Unexpected error: {e}")
+            status_code, _ = await self._make_request(session, 'post', f"connect/{self.cabot_id}")
+            if status_code == 200:
+                logger.info(f"CabotDashboardClient {self.cabot_id}: Connected to server")
+                return True
+            elif status_code == 403:
+                logger.error(f"CabotDashboardClient {self.cabot_id}: Authentication failed. Please check your API key.")
+                return False
+            else:
+                logger.error(f"CabotDashboardClient {self.cabot_id}: Connection failed. Status: {status_code}")
             
             await asyncio.sleep(self.retry_delay)
         
@@ -65,34 +70,30 @@ class CabotDashboardClient:
         return False
 
     async def handle_command(self, session, command):
+        logger.info(f"CabotDashboardClient {self.cabot_id}: Processing command: {command}")
         if command == "restart":
             await self.send_status(session, "Restarting...")
-            logger.info(f"CabotDashboardClient {self.cabot_id} is restarting...")
-            for i in range(10, 0, -1):
-                logger.info(f"CabotDashboardClient {self.cabot_id} will restart in {i} seconds...")
-                await asyncio.sleep(1)
-            logger.info(f"CabotDashboardClient {self.cabot_id} has restarted.")
+            logger.info(f"CabotDashboardClient {self.cabot_id} Restarting...")
+            await asyncio.sleep(10)  # Simulating restart time
+            logger.info(f"CabotDashboardClient {self.cabot_id} Restart complete.")
             await self.send_status(session, "Restart complete.")
+        else:
+            logger.warning(f"CabotDashboardClient {self.cabot_id}: Unknown command: {command}")
 
     async def poll(self, session):
-        headers = {"X-API-Key": self.api_key}
-        try:
-            async with session.get(f"{self.base_url}/poll/{self.cabot_id}", headers=headers) as response:
-                if response.status == 200:
-                    data = await response.json()
-                    message = data.get("message")
-                    if message:
-                        logger.info(f"CabotDashboardClient {self.cabot_id} received command: {message}")
-                        await self.handle_command(session, message)
-                elif response.status == 404:
-                    logger.warning(f"CabotDashboardClient {self.cabot_id}: Not connected to server. Reconnecting...")
-                    return False
-                else:
-                    logger.warning(f"CabotDashboardClient {self.cabot_id}: Unexpected response status: {response.status}")
-        except ClientError as e:
-            logger.error(f"CabotDashboardClient {self.cabot_id}: Polling error: {e}")
+        status_code, data = await self._make_request(session, 'get', f"poll/{self.cabot_id}")
+        if status_code == 200:
+            logger.info(f"CabotDashboardClient {self.cabot_id}: Received data from server: {data}")
+            if data['type'] == 'command':
+                await self.handle_command(session, data['data'])
+            elif data['type'] == 'state':
+                await self.handle_state_update(data['data'])
+        elif status_code == 404:
+            logger.warning(f"CabotDashboardClient {self.cabot_id}: Not connected to server. Attempting to reconnect...")
             return False
-        return True
+        else:
+            logger.warning(f"CabotDashboardClient {self.cabot_id}: Unexpected response status: {status_code}")
+        return status_code == 200
 
     async def run(self):
         async with aiohttp.ClientSession() as session:
@@ -100,7 +101,8 @@ class CabotDashboardClient:
                 if await self.connect(session):
                     try:
                         while await self.poll(session):
-                            await asyncio.sleep(self.polling_interval)
+                            await self.send_status(session, f"Status update from {self.cabot_id}")
+                            await asyncio.sleep(10)  # Status update every 10 seconds
                     except Exception as e:
                         logger.error(f"CabotDashboardClient {self.cabot_id}: Error during polling: {e}")
                 await asyncio.sleep(self.retry_delay)
@@ -115,4 +117,4 @@ if __name__ == "__main__":
     except KeyboardInterrupt:
         logger.info("Shutting down gracefully...")
     except Exception as e:
-        logger.critical(f"Unexpected error in main: {e}")
+        logger.critical(f"Unexpected error in main process: {e}")

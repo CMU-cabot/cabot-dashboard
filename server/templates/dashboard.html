@@ -1,12 +1,12 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ja">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dashboard</title>
+    <title>ダッシュボード</title>
     <style>
         body {
-            font-family: Arial, sans-serif;
+            font-family: 'Hiragino Sans', 'Meiryo', sans-serif;
             margin: 0;
             padding: 20px;
             background-color: #f0f0f0;
@@ -47,15 +47,15 @@
 </head>
 <body>
     <div id="dashboard">
-        <h1>Cabot Dashboard</h1>
-        <p>Welcome, {{ user }}</p>
+        <h1>Cabotダッシュボード</h1>
+        <p>ようこそ、{{ user }}さん</p>
         <form action="/logout" method="post">
-            <input type="submit" value="Logout">
+            <input type="submit" value="ログアウト">
         </form>
   
         <div id="messages"></div>
         <div id="cabots"></div>
-        <div id="connection-status">Connection status: Connecting</div>
+        <div id="connection-status">接続状態: 接続中</div>
     </div>
 
     <script>
@@ -77,14 +77,49 @@
             try {
                 const response = await fetch(url, mergedOptions);
                 if (!response.ok) {
-                    throw new Error(`HTTP error! status: ${response.status}`);
+                    throw new Error(`HTTPエラー! ステータス: ${response.status}`);
                 }
                 return await response.json();
             } catch (error) {
-                console.error('Fetch error:', error);
-                addMessage(`Fetch error: ${error.message}`, "error");
+                console.error('フェッチエラー:', error);
+                addMessage(`フェッチエラー: ${error.message}`, "error");
                 throw error;
             }
+        }
+
+        async function fetchUpdates() {
+            try {
+                const url = new URL('/receive', baseUrl);
+                const data = await fetchWithAuth(url);
+                updateDashboard(data);
+            } catch (error) {
+                console.error('更新の取得中にエラーが発生しました:', error);
+            }
+        }
+
+        function updateDashboard(data) {
+            updateRobotList(data.robots);
+            updateMessages(data.messages);
+            // updateEvents(data.events);  // イベントの更新処理があれば実装
+        }
+
+        function updateRobotList(robots) {
+            // 既存のupdateCabotList関数を使用または修正
+        }
+
+        function updateMessages(messages) {
+            messagesDiv.innerHTML = '<h2>メッセージ</h2>';
+            const messageList = document.createElement('ul');
+            messages.forEach(message => {
+                const li = document.createElement('li');
+                li.textContent = `${new Date(message.timestamp).toLocaleString()} - ${message.client_id}: ${message.message}`;
+                messageList.appendChild(li);
+            });
+            messagesDiv.appendChild(messageList);
+        }
+
+        function updateEvents(events) {
+            // イベント表示を更新
         }
 
         async function fetchMessages() {
@@ -95,7 +130,7 @@
                     data.messages.forEach(message => addMessage(message, "status"));
                 }
             } catch (error) {
-                console.error('Error fetching messages:', error);
+                console.error('メッセージの取得中にエラーが発生しました:', error);
             }
         }
 
@@ -113,37 +148,37 @@
                 const data = await fetchWithAuth(url);
                 updateCabotList(data.cabots);
             } catch (error) {
-                console.error('Error fetching cabot list:', error);
+                console.error('Cabotリストの取得中にエラーが発生しました:', error);
             }
         }
 
         function updateCabotList(cabots) {
-            cabotsDiv.innerHTML = '<h2>Connected Cabots</h2>';
+            cabotsDiv.innerHTML = '<h2>接続済みCabot</h2>';
             const table = document.createElement('table');
             table.innerHTML = `
                 <tr>
                     <th>Cabot ID</th>
-                    <th>Action</th>
-                    <th>Last Poll Time</th>
-                    <th>Message</th>
+                    <th>アクション</th>
+                    <th>最終ポーリング時間</th>
+                    <th>メッセージ</th>
                 </tr>
             `;
             cabots.forEach(cabot => {
                 const row = table.insertRow();
-                row.insertCell().textContent = cabot.id || 'Unknown';
+                row.insertCell().textContent = cabot.id || '不明';
                 const actionCell = row.insertCell();
                 const restartButton = document.createElement('button');
-                restartButton.textContent = 'Restart';
+                restartButton.textContent = '再起動';
                 restartButton.onclick = () => sendCommand(cabot.id, 'restart');
                 actionCell.appendChild(restartButton);
-                row.insertCell().textContent = formatDateTime(cabot.last_poll) || 'Unknown';
+                row.insertCell().textContent = formatDateTime(cabot.last_poll) || '不明';
                 row.insertCell().textContent = cabot.message || '';
             });
             cabotsDiv.appendChild(table);
         }
 
         function formatDateTime(dateTimeString) {
-            if (!dateTimeString) return 'Unknown';
+            if (!dateTimeString) return '不明';
             const date = new Date(dateTimeString);
             return date.toLocaleString();
         }
@@ -161,19 +196,20 @@
                 };
                 const response = await fetch(url, options);
                 if (!response.ok) {
-                    throw new Error(`API authentication failed. Status: ${response.status}`);
+                    throw new Error(`API認証に失敗しました。ステータス: ${response.status}`);
                 }
                 const data = await response.json();
-                console.log('Command sent:', data);
-                addMessage(`Command sent: ${cabotId} - ${command}`, "status");
+                console.log('コマンド送信:', data);
+                addMessage(`コマンド送信: ${cabotId} - ${command}`, "status");
             } catch (error) {
-                console.error('Error sending command:', error);
-                addMessage(`Error sending command: ${error.message}`, "error");
+                console.error('コマンド送信中にエラーが発生しました:', error);
+                addMessage(`コマンド送信エラー: ${error.message}`, "error");
             }
         }
 
         setInterval(fetchMessages, 1000);
         setInterval(fetchConnectedCabots, 5000);
+        setInterval(fetchUpdates, 5000);
     </script>
 </body>
 </html>

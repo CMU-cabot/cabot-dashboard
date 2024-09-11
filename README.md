@@ -79,8 +79,8 @@ graph TB
 
 ## プロトタイプ
 
-1. `main.py` を実行してサーバーを起動します。
-2. `cabot.py` を実行してロボットをシミュレートします。
+1. `cabot_dashboard_server.py` を実行してサーバーを起動します。
+2. `cabot_dashboard_client.py` を実行してロボットをシミュレートします。
 
 ### シーケンス図
 
@@ -90,26 +90,36 @@ sequenceDiagram
     participant Server
     participant Robot
 
-    Dashboard->>Server: POST /connect/dashboard
-    Server-->>Dashboard: 接続確認応答
+    Dashboard->>Server: GET /connected_cabots
+    Server-->>Dashboard: List of connected robots
 
-    Robot->>Server: POST /connect/{robot_id}
-    Server-->>Robot: 接続確認応答
-
-    loop ダッシュボード更新
-        Dashboard->>Server: GET /receive
-        Server-->>Dashboard: ロボット情報とメッセージ
+    loop Polling
+        Robot->>Server: GET /poll/{client_id}
+        alt Command available
+            Server-->>Robot: Command
+            Robot->>Robot: Execute command
+            Robot->>Server: POST /send/{client_id} (Status update)
+        else No command
+            Server-->>Robot: Wait until timeout
+        end
     end
 
-    loop ロボットポーリング
-        Robot->>Server: GET /poll/{robot_id}
-        Server-->>Robot: コマンド（あれば）
-    end
+    Dashboard->>Server: GET /receive
+    Server-->>Dashboard: Robot info, messages, events
 
-    Dashboard->>Server: POST /send_command/{robot_id}
-    Server-->>Robot: コマンドを送信
-    Robot-->>Server: コマンド処理結果
-    Server-->>Dashboard: コマンド処理結果
+    Dashboard->>Server: POST /send_command/{cabot_id}
+    Server->>Server: Add command to queue
+    Server-->>Dashboard: Command receipt confirmation
+
+    Note over Server,Robot: Command will be sent on next polling
+
+    Robot->>Server: GET /poll/{client_id}
+    Server-->>Robot: Retrieve command from queue
+    Robot->>Robot: Execute command
+    Robot->>Server: POST /send/{client_id} (Command execution result)
+
+    Dashboard->>Server: GET /receive
+    Server-->>Dashboard: Updated robot info, messages, events
 ```
 
 ## Docker
@@ -146,16 +156,26 @@ docker-compose down
 
 - 環境変数
   - WEBSITES_PORT = 8000
-  - CABOT_DASHBOARD_API_KEY
-  - CABOT_DASHBOARD_SERVER_URL (for client)
-  - CABOT_DASHBOARD_LOG_LEVEL
-  - CABOT_DASHBOARD_LOG_TO_FILE
+  - CABOT_DASHBOARD_LOG_LEVEL=INFO
+  - CABOT_DASHBOARD_LOG_TO_FILE=false
+  - CABOT_DASHBOARD_API_KEY=a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6
+  - CABOT_DASHBOARD_SESSION_TIMEOUT=1800
+  - CABOT_DASHBOARD_MAX_ROBOTS=20 # Maximum number of connected robots
+  - CABOT_DASHBOARD_POLL_TIMEOUT=30 # Timeout period (seconds)
   - ~~ WEBSITES_WEBSOCKETS_ENABLED = 1 ~~
   - https://learn.microsoft.com/ja-jp/azure/app-service/reference-app-settings?source=recommendations&tabs=kudu%2Cdotnet
+  - https://learn.microsoft.com/ja-jp/answers/questions/1602711/azureappservice-4
+    - AppServiceのTimeout240秒で変更不可の模様
 
 ### Client
 
 - ロボット側で Azure Container Registry から pull
+- 環境変数
+  - CABOT_DASHBOARD_SERVER_URL=http://dev01-miraikan-dashboard-webapp.azurewebsites.net
+  - CABOT_DASHBOARD_API_KEY=a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6
+  - CABOT_DASHBOARD_LOG_LEVEL=INFO
+  - CABOT_DASHBOARD_LOG_TO_FILE=false
+  - CABOT_DASHBOARD_POLLING_INTERVAL=1
 
 ### Web
 
