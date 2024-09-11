@@ -1,79 +1,120 @@
-# This code simulates three robots, each sending random status updates.
-# Finally, we create a simulation code for the dashboard:
-
+import aiohttp
 import asyncio
-import websockets
-import random
-import os
 import logging
-import sys
-
-import asyncio
-import websockets
-import random
 import os
-import logging
-import sys
+from aiohttp import ClientError, ClientConnectorError, ServerDisconnectedError
 
-# Log configuration
 def setup_logger():
-    log_level = os.environ.get('LOG_LEVEL', 'INFO')
+    log_level = os.environ.get('CABOT_DASHBOARD_LOG_LEVEL', 'INFO')
     log_format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
     date_format = '%Y-%m-%d %H:%M:%S'
 
     logger = logging.getLogger(__name__)
     logger.setLevel(log_level)
-
-    # Clear existing handlers
     logger.handlers.clear()
 
-    if os.environ.get('LOG_TO_FILE', 'false').lower() == 'true':
-        log_file = os.environ.get('LOG_FILE', 'robot.log')
-        file_handler = logging.FileHandler(log_file)
-        file_handler.setFormatter(logging.Formatter(log_format, date_format))
-        logger.addHandler(file_handler)
+    log_to_file = os.environ.get('CABOT_DASHBOARD_LOG_TO_FILE', 'false').lower() == 'true'
+    if log_to_file:
+        handler = logging.FileHandler(os.environ.get('CABOT_DASHBOARD_LOG_FILE', 'robot.log'))
     else:
-        stream_handler = logging.StreamHandler(sys.stdout)
-        stream_handler.setFormatter(logging.Formatter(log_format, date_format))
-        logger.addHandler(stream_handler)
+        handler = logging.StreamHandler()
+
+    handler.setFormatter(logging.Formatter(log_format, date_format))
+    logger.addHandler(handler)
 
     return logger
 
 logger = setup_logger()
 
-async def robot(robot_id):
-    uri = os.environ.get("SERVER_URL", "ws://localhost:8000/ws")
-    uri = f"{uri}/{robot_id}"
-    while True:
+class Robot:
+    def __init__(self, robot_id):
+        self.robot_id = robot_id
+        self.base_url = os.environ.get("CABOT_DASHBOARD_SERVER_URL", "http://server:8000")
+        self.api_key = os.environ.get("CABOT_DASHBOARD_API_KEY", "your_secret_api_key_here")
+        self.max_retries = 5
+        self.retry_delay = 5  # seconds
+
+    async def send_status(self, session, status):
+        headers = {"X-API-Key": self.api_key}
         try:
-            async with websockets.connect(uri, ping_interval=20, ping_timeout=60) as websocket:
-                while True:
-                    status = random.choice(["Moving", "Stopped", "Charging"])
-                    try:
-                        await websocket.send(f"Status: {status}")
-                        await asyncio.sleep(5)
-                    except websockets.exceptions.ConnectionClosedError:
-                        logger.info(f"Robot {robot_id}: Connection closed. Attempting to reconnect.")
-                        break
-                    except Exception as e:
-                        logger.error(f"Robot {robot_id}: An error occurred while sending message: {e}")
-                        break
-        except websockets.exceptions.ConnectionClosedError:
-            logger.info(f"Robot {robot_id}: Connection closed. Attempting to reconnect.")
-        except Exception as e:
-            logger.error(f"Robot {robot_id}: A connection error occurred: {e}")
+            async with session.post(f"{self.base_url}/send/{self.robot_id}", headers=headers, json={"message": status}) as response:
+                if response.status != 200:
+                    logger.warning(f"Robot {self.robot_id}: Failed to send status")
+        except aiohttp.ClientError as e:
+            logger.error(f"Robot {self.robot_id}: Failed to send status: {e}")
+
+    async def connect(self, session):
+        headers = {"X-API-Key": self.api_key}
+        for attempt in range(self.max_retries):
+            try:
+                async with session.post(f"{self.base_url}/connect/{self.robot_id}", headers=headers) as response:
+                    if response.status == 200:
+                        logger.info(f"Robot {self.robot_id}: Connected to server")
+                        return True
+                    elif response.status == 403:
+                        logger.error(f"Robot {self.robot_id}: Authentication failed. Check API key.")
+                        return False
+                    else:
+                        logger.error(f"Robot {self.robot_id}: Failed to connect. Status: {response.status}")
+            except (ClientConnectorError, ServerDisconnectedError, ClientError) as e:
+                logger.error(f"Robot {self.robot_id}: Connection error: {e}. Retrying in {self.retry_delay} seconds...")
+            except Exception as e:
+                logger.error(f"Robot {self.robot_id}: Unexpected error: {e}")
+            
+            await asyncio.sleep(self.retry_delay)
         
-        logger.info(f"Robot {robot_id}: Attempting to reconnect in 5 seconds...")
-        await asyncio.sleep(5)
+        logger.error(f"Robot {self.robot_id}: Failed to connect after {self.max_retries} attempts")
+        return False
+
+    async def handle_command(self, session, command):
+        if command == "restart":
+            await self.send_status(session, "Restarting...")
+            logger.info(f"Robot {self.robot_id} is restarting...")
+            for i in range(10, 0, -1):
+                logger.info(f"Robot {self.robot_id} will restart in {i} seconds...")
+                await asyncio.sleep(1)
+            logger.info(f"Robot {self.robot_id} has restarted.")
+            await self.send_status(session, "Restart complete.")
+
+    async def poll(self, session):
+        headers = {"X-API-Key": self.api_key}
+        try:
+            async with session.get(f"{self.base_url}/poll/{self.robot_id}", headers=headers) as response:
+                if response.status == 200:
+                    data = await response.json()
+                    message = data.get("message")
+                    if message:
+                        logger.info(f"Robot {self.robot_id} received command: {message}")
+                        await self.handle_command(session, message)
+                elif response.status == 404:
+                    logger.warning(f"Robot {self.robot_id}: Not connected to server. Reconnecting...")
+                    return False
+                else:
+                    logger.warning(f"Robot {self.robot_id}: Unexpected response status: {response.status}")
+        except aiohttp.ClientError as e:
+            logger.error(f"Robot {self.robot_id}: Polling error: {e}")
+            return False
+        return True
+
+    async def run(self):
+        async with aiohttp.ClientSession() as session:
+            while True:
+                if await self.connect(session):
+                    try:
+                        while await self.poll(session):
+                            await asyncio.sleep(1)
+                    except Exception as e:
+                        logger.error(f"Robot {self.robot_id}: Error during polling: {e}")
+                await asyncio.sleep(self.retry_delay)
 
 async def main():
-    tasks = [robot(f"robot_{i}") for i in range(3)]
-    await asyncio.gather(*tasks)
+    robots = [Robot(f"robot{i}") for i in range(1, 4)]
+    await asyncio.gather(*(robot.run() for robot in robots))
 
 if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        logger.info("Program interrupted.")
+        logger.info("Shutting down gracefully...")
     except Exception as e:
-        logger.error(f"An unexpected error occurred: {e}")
+        logger.critical(f"Unexpected error in main: {e}")

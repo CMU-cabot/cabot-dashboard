@@ -9,15 +9,10 @@
 
 - ロボット（dashboard-client）
   - ロボットの状態を取得する
-  - ロボットの操作を行う
-- ダッシュボード (dashboard-web)
+  - ロボットの操作を実行する
+- サーバー (dashboard-server)
   - ロボットの状態を表示する
-  - ロボットの操作を行う
-- APIサーバー (dashboard-server)
-  - ロボットの状態を取得する
-  - ロボットの操作を行う
-  - ロボットの状態を表示する
-  - ロボットの操作を行う
+  - ロボットの操作を指示する
 
 ## アーキテクチャ
 
@@ -32,7 +27,6 @@ graph TB
     subgraph "Azure"
         ACR[Azure Container Registry]
         WebApp[Azure Web App for Container]
-        Blob[Azure Blob Storage]
         Webhook[Webhook]
     end
 
@@ -52,10 +46,9 @@ graph TB
     Webhook -->|自動デプロイ| WebApp
     ACR -->|イメージをpull| WebApp
     ACR -->|イメージをpull| ClientDocker
-    Dev -->|Webファイルを手動アップロード| Blob
     ROS -->|起動| ClientDocker
-    PC -->|アクセス| Blob
-    Smartphone -->|アクセス| Blob
+    PC -->|アクセス| WebApp
+    Smartphone -->|アクセス| WebApp
     PC -->|WebSocket接続| WebApp
     Smartphone -->|WebSocket接続| WebApp
     ClientDocker -->|WebSocket接続| WebApp
@@ -67,68 +60,62 @@ graph TB
 - 構成要素はDockerで管理
   - Serverはクラウド上に構築しDockerコンテナで起動
   - ClientはAIスーツ側に配置しDockerコンテナで起動（ROS or Ubuntu）
-  - Webは静的Webサイトとして配置
 
-- WebSocket で通信
+- ロングポーリングで通信
   - ロボットとダッシュボードの間でメッセージをやり取りする
 
 - Pythonで実装
   - サーバサイドは、FastAPIのフレームワークを利用
 
--  Server接続の認証方式（要検討）
-
+- 認証方式
+  - APIへのアクセスはAPIキー認証
 
 ## プロトタイプ
 
 1. `main.py` を実行してサーバーを起動します。
 2. `robot.py` を実行してロボットをシミュレートします。
-3. `dashboard.py` を実行してダッシュボードをシミュレートします。
 
 ### シーケンス図
 
 ``` mermaid
 sequenceDiagram
-    participant User as ユーザー
-    participant Docker as Dockerコンテナ
-    participant Server as main.py (Server)
-    participant Robot as robot.py (Robot)
-    participant Dashboard as dashboard.html (Dashboard)
+    participant Dashboard
+    participant Server
+    participant Robot
 
-    User->>Docker: コンテナ起動
-    Docker->>Server: main.py実行
-    Server->>Server: FastAPIサーバー起動
+    Dashboard->>Server: POST /connect/dashboard
+    Server-->>Dashboard: 接続確認応答
 
-    Robot->>Server: WebSocket接続要求
-    Server->>Robot: 接続確立
-    Dashboard->>Server: WebSocket接続要求
-    Server->>Dashboard: 接続確立
+    Robot->>Server: POST /connect/{robot_id}
+    Server-->>Robot: 接続確認応答
 
-    loop ロボットの状態更新
-        Robot->>Robot: ステータス生成
-        Robot->>Server: ステータス送信
-        Server->>Server: メッセージ受信
-        Server->>Dashboard: ステータス転送
-        Dashboard->>Dashboard: メッセージ表示
+    loop ダッシュボード更新
+        Dashboard->>Server: GET /receive
+        Server-->>Dashboard: ロボット情報とメッセージ
     end
 
-    alt タイムアウト発生
-        Server->>Server: タイムアウト検出
-        Server->>Dashboard: タイムアウト通知
-    else 接続切断
-        Robot->>Server: 切断
-        Server->>Dashboard: 切断通知
+    loop ロボットポーリング
+        Robot->>Server: GET /poll/{robot_id}
+        Server-->>Robot: コマンド（あれば）
     end
 
-    loop 再接続
-        Robot->>Server: 再接続試行
-        Server->>Robot: 接続再確立
-    end
+    Dashboard->>Server: POST /send_command/{robot_id}
+    Server-->>Dashboard: コマンド送信確認
 
-    User->>Docker: コンテナ停止
-    Docker->>Server: 終了シグナル
-    Server->>Server: クリーンアップ
-    Server->>Robot: 接続終了
-    Server->>Dashboard: 接続終了
+    Robot->>Server: GET /poll/{robot_id}
+    Server-->>Robot: 新しいコマンド
+
+    Robot->>Server: POST /send/{robot_id}
+    Server-->>Robot: メッセージ受信確認
+
+    Dashboard->>Server: GET /receive
+    Server-->>Dashboard: 新しいメッセージ
+
+    Dashboard->>Server: POST /disconnect/dashboard
+    Server-->>Dashboard: 切断確認
+
+    Robot->>Server: POST /disconnect/{robot_id}
+    Server-->>Robot: 切断確認
 ```
 
 ## Docker
@@ -165,6 +152,10 @@ docker-compose down
 
 - 環境変数
   - WEBSITES_PORT = 8000
+  - CABOT_DASHBOARD_API_KEY
+  - CABOT_DASHBOARD_SERVER_URL (for client)
+  - CABOT_DASHBOARD_LOG_LEVEL
+  - CABOT_DASHBOARD_LOG_TO_FILE
   - ~~ WEBSITES_WEBSOCKETS_ENABLED = 1 ~~
   - https://learn.microsoft.com/ja-jp/azure/app-service/reference-app-settings?source=recommendations&tabs=kudu%2Cdotnet
 
@@ -174,8 +165,7 @@ docker-compose down
 
 ### Web
 
-- Blobストレージの静的サイトに配置
-  - （サーバのコンテナにまとめられたらまとめる）
+- サーバに内包
 
 
 ## 参考）開発環境（Python仮想環境の構築）

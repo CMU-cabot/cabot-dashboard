@@ -1,0 +1,186 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f0f0f0;
+        }
+        #dashboard {
+            background-color: white;
+            border-radius: 5px;
+            padding: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        #messages, #robots {
+            height: 200px;
+            overflow-y: auto;
+            border: 1px solid #ddd;
+            padding: 10px;
+            margin-bottom: 20px;
+        }
+        .status { margin-bottom: 5px; }
+        .error { color: red; }
+        button { margin-right: 10px; }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 8px;
+            text-align: left;
+        }
+        th { background-color: #f2f2f2; }
+    </style>
+</head>
+<body>
+    <div id="dashboard">
+        <h1>Robot Dashboard</h1>
+        <div id="messages"></div>
+        <div id="robots"></div>
+        <div id="connection-status">Connection status: Connecting</div>
+    </div>
+
+    <script>
+        const messagesDiv = document.getElementById('messages');
+        const robotsDiv = document.getElementById('robots');
+        const connectionStatus = document.getElementById('connection-status');
+
+        const baseUrl = '{{ base_url }}';
+        const apiKey = '{{ api_key }}';
+
+        async function fetchData(url, options = {}) {
+            const defaultOptions = {
+                headers: {
+                    'X-API-Key': apiKey
+                }
+            };
+            const mergedOptions = { ...defaultOptions, ...options };
+            
+            try {
+                const response = await fetch(url, mergedOptions);
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return await response.json();
+            } catch (error) {
+                console.error('Fetch error:', error);
+                addMessage(`Fetch error: ${error.message}`, "error");
+                throw error;
+            }
+        }
+
+        async function fetchMessages() {
+            try {
+                const url = new URL('/receive', baseUrl).toString();
+                const data = await fetchData(url);
+                if (data.messages && data.messages.length > 0) {
+                    // Logic to display messages
+                } else {
+                    console.log("No new messages");
+                }
+            } catch (error) {
+                console.error('Error fetching messages:', error);
+            }
+        }
+
+        function addMessage(message, type) {
+            const messageElement = document.createElement('div');
+            messageElement.textContent = message;
+            messageElement.className = type;
+            messagesDiv.appendChild(messageElement);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        async function fetchConnectedRobots() {
+            try {
+                const url = new URL('/receive', baseUrl).toString();
+                const data = await fetchData(url);
+                updateRobotList(data.robots || []);
+            } catch (error) {
+                console.error('Error fetching robot list:', error);
+            }
+        }
+
+        function updateRobotList(robots) {
+            robotsDiv.innerHTML = '<h2>Connected Robots</h2>';
+            const table = document.createElement('table');
+            table.innerHTML = `
+                <tr>
+                    <th>Robot ID</th>
+                    <th>Action</th>
+                    <th>Last Poll Time</th>
+                    <th>Message</th>
+                </tr>
+            `;
+            robots.forEach(robot => {
+                const row = table.insertRow();
+                row.insertCell().textContent = robot.id || 'Unknown';
+                const actionCell = row.insertCell();
+                const restartButton = document.createElement('button');
+                restartButton.textContent = 'Restart';
+                restartButton.onclick = () => sendCommand(robot.id, 'restart');
+                actionCell.appendChild(restartButton);
+                row.insertCell().textContent = formatDateTime(robot.last_poll) || 'Unknown';
+                row.insertCell().textContent = robot.message || '';
+            });
+            robotsDiv.appendChild(table);
+        }
+
+        function formatDateTime(dateTimeString) {
+            if (!dateTimeString) return 'Unknown';
+            const date = new Date(dateTimeString);
+            return date.toLocaleString();
+        }
+
+        async function sendCommand(robotId, command) {
+            try {
+                const url = `${baseUrl}send_command/${robotId}`;
+                const options = {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-API-Key': apiKey
+                    },
+                    body: JSON.stringify({ command: command }),
+                };
+                const data = await fetchData(url, options);
+                console.log('Command sent:', data);
+                addMessage(`Command sent: ${robotId} - ${command}`, "status");
+            } catch (error) {
+                console.error('Error sending command:', error);
+                addMessage(`Error sending command: ${error.message}`, "error");
+            }
+        }
+
+        async function connect() {
+            try {
+                const url = `${baseUrl}connect/dashboard`;
+                const options = {
+                    method: 'POST',
+                    headers: {
+                        'X-API-Key': apiKey
+                    }
+                };
+                await fetchData(url, options);
+                connectionStatus.textContent = 'Connection status: Connected';
+                addMessage("Connected to server", "status");
+            } catch (error) {
+                console.error('Connection error:', error);
+                connectionStatus.textContent = 'Connection status: Disconnected';
+                addMessage("Failed to connect to server", "error");
+            }
+        }
+
+        connect();
+        setInterval(fetchMessages, 1000);
+        setInterval(fetchConnectedRobots, 5000);
+    </script>
+</body>
+</html>
