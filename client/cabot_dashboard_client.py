@@ -14,10 +14,7 @@ def setup_logger():
     logger.handlers.clear()
 
     log_to_file = os.environ.get('CABOT_DASHBOARD_LOG_TO_FILE', 'false').lower() == 'true'
-    if log_to_file:
-        handler = logging.FileHandler(os.environ.get('CABOT_DASHBOARD_LOG_FILE', 'robot.log'))
-    else:
-        handler = logging.StreamHandler()
+    handler = logging.FileHandler(os.environ.get('CABOT_DASHBOARD_LOG_FILE', 'cabot.log')) if log_to_file else logging.StreamHandler()
 
     handler.setFormatter(logging.Formatter(log_format, date_format))
     logger.addHandler(handler)
@@ -26,73 +23,74 @@ def setup_logger():
 
 logger = setup_logger()
 
-class Robot:
-    def __init__(self, robot_id):
-        self.robot_id = robot_id
+class CabotDashboardClient:
+    def __init__(self, cabot_id):
+        self.cabot_id = cabot_id
         self.base_url = os.environ.get("CABOT_DASHBOARD_SERVER_URL", "http://server:8000")
         self.api_key = os.environ.get("CABOT_DASHBOARD_API_KEY", "your_secret_api_key_here")
         self.max_retries = 5
         self.retry_delay = 5  # seconds
+        self.polling_interval = int(os.environ.get("CABOT_DASHBOARD_POLLING_INTERVAL", "1"))
 
     async def send_status(self, session, status):
         headers = {"X-API-Key": self.api_key}
         try:
-            async with session.post(f"{self.base_url}/send/{self.robot_id}", headers=headers, json={"message": status}) as response:
+            async with session.post(f"{self.base_url}/send/{self.cabot_id}", headers=headers, json={"message": status}) as response:
                 if response.status != 200:
-                    logger.warning(f"Robot {self.robot_id}: Failed to send status")
-        except aiohttp.ClientError as e:
-            logger.error(f"Robot {self.robot_id}: Failed to send status: {e}")
+                    logger.warning(f"CabotDashboardClient {self.cabot_id}: Failed to send status")
+        except ClientError as e:
+            logger.error(f"CabotDashboardClient {self.cabot_id}: Failed to send status: {e}")
 
     async def connect(self, session):
         headers = {"X-API-Key": self.api_key}
         for attempt in range(self.max_retries):
             try:
-                async with session.post(f"{self.base_url}/connect/{self.robot_id}", headers=headers) as response:
+                async with session.post(f"{self.base_url}/connect/{self.cabot_id}", headers=headers) as response:
                     if response.status == 200:
-                        logger.info(f"Robot {self.robot_id}: Connected to server")
+                        logger.info(f"CabotDashboardClient {self.cabot_id}: Connected to server")
                         return True
                     elif response.status == 403:
-                        logger.error(f"Robot {self.robot_id}: Authentication failed. Check API key.")
+                        logger.error(f"CabotDashboardClient {self.cabot_id}: Authentication failed. Check API key.")
                         return False
                     else:
-                        logger.error(f"Robot {self.robot_id}: Failed to connect. Status: {response.status}")
+                        logger.error(f"CabotDashboardClient {self.cabot_id}: Failed to connect. Status: {response.status}")
             except (ClientConnectorError, ServerDisconnectedError, ClientError) as e:
-                logger.error(f"Robot {self.robot_id}: Connection error: {e}. Retrying in {self.retry_delay} seconds...")
+                logger.error(f"CabotDashboardClient {self.cabot_id}: Connection error: {e}. Retrying in {self.retry_delay} seconds...")
             except Exception as e:
-                logger.error(f"Robot {self.robot_id}: Unexpected error: {e}")
+                logger.error(f"CabotDashboardClient {self.cabot_id}: Unexpected error: {e}")
             
             await asyncio.sleep(self.retry_delay)
         
-        logger.error(f"Robot {self.robot_id}: Failed to connect after {self.max_retries} attempts")
+        logger.error(f"CabotDashboardClient {self.cabot_id}: Failed to connect after {self.max_retries} attempts")
         return False
 
     async def handle_command(self, session, command):
         if command == "restart":
             await self.send_status(session, "Restarting...")
-            logger.info(f"Robot {self.robot_id} is restarting...")
+            logger.info(f"CabotDashboardClient {self.cabot_id} is restarting...")
             for i in range(10, 0, -1):
-                logger.info(f"Robot {self.robot_id} will restart in {i} seconds...")
+                logger.info(f"CabotDashboardClient {self.cabot_id} will restart in {i} seconds...")
                 await asyncio.sleep(1)
-            logger.info(f"Robot {self.robot_id} has restarted.")
+            logger.info(f"CabotDashboardClient {self.cabot_id} has restarted.")
             await self.send_status(session, "Restart complete.")
 
     async def poll(self, session):
         headers = {"X-API-Key": self.api_key}
         try:
-            async with session.get(f"{self.base_url}/poll/{self.robot_id}", headers=headers) as response:
+            async with session.get(f"{self.base_url}/poll/{self.cabot_id}", headers=headers) as response:
                 if response.status == 200:
                     data = await response.json()
                     message = data.get("message")
                     if message:
-                        logger.info(f"Robot {self.robot_id} received command: {message}")
+                        logger.info(f"CabotDashboardClient {self.cabot_id} received command: {message}")
                         await self.handle_command(session, message)
                 elif response.status == 404:
-                    logger.warning(f"Robot {self.robot_id}: Not connected to server. Reconnecting...")
+                    logger.warning(f"CabotDashboardClient {self.cabot_id}: Not connected to server. Reconnecting...")
                     return False
                 else:
-                    logger.warning(f"Robot {self.robot_id}: Unexpected response status: {response.status}")
-        except aiohttp.ClientError as e:
-            logger.error(f"Robot {self.robot_id}: Polling error: {e}")
+                    logger.warning(f"CabotDashboardClient {self.cabot_id}: Unexpected response status: {response.status}")
+        except ClientError as e:
+            logger.error(f"CabotDashboardClient {self.cabot_id}: Polling error: {e}")
             return False
         return True
 
@@ -102,14 +100,14 @@ class Robot:
                 if await self.connect(session):
                     try:
                         while await self.poll(session):
-                            await asyncio.sleep(1)
+                            await asyncio.sleep(self.polling_interval)
                     except Exception as e:
-                        logger.error(f"Robot {self.robot_id}: Error during polling: {e}")
+                        logger.error(f"CabotDashboardClient {self.cabot_id}: Error during polling: {e}")
                 await asyncio.sleep(self.retry_delay)
 
 async def main():
-    robots = [Robot(f"robot{i}") for i in range(1, 4)]
-    await asyncio.gather(*(robot.run() for robot in robots))
+    cabots = [CabotDashboardClient(f"cabot{i}") for i in range(1, 4)]
+    await asyncio.gather(*(cabot.run() for cabot in cabots))
 
 if __name__ == "__main__":
     try:

@@ -67,13 +67,20 @@ graph TB
 - Pythonで実装
   - サーバサイドは、FastAPIのフレームワークを利用
 
-- 認証方式
-  - APIへのアクセスはAPIキー認証
+- API認証方式
+  - APIキー認証
+
+- 管理画面認証方式
+  - ID、パスワードによるログイン認証
+  - ID、パスワードは、JSONファイルで管理とし、複数ユーザ管理できる
+  - ログインセッションのタイムアウトは環境変数で設定とする
+  - ログインするとダッシュボードの右上にIDを表示
+  - ログアウトボタンでログアウトする
 
 ## プロトタイプ
 
 1. `main.py` を実行してサーバーを起動します。
-2. `robot.py` を実行してロボットをシミュレートします。
+2. `cabot.py` を実行してロボットをシミュレートします。
 
 ### シーケンス図
 
@@ -81,13 +88,13 @@ graph TB
 sequenceDiagram
     participant Dashboard
     participant Server
-    participant Robot
+    participant Cabot
 
     Dashboard->>Server: POST /connect/dashboard
     Server-->>Dashboard: 接続確認応答
 
-    Robot->>Server: POST /connect/{robot_id}
-    Server-->>Robot: 接続確認応答
+    Cabot->>Server: POST /connect/{cabot_id}
+    Server-->>Cabot: 接続確認応答
 
     loop ダッシュボード更新
         Dashboard->>Server: GET /receive
@@ -95,18 +102,18 @@ sequenceDiagram
     end
 
     loop ロボットポーリング
-        Robot->>Server: GET /poll/{robot_id}
-        Server-->>Robot: コマンド（あれば）
+        Cabot->>Server: GET /poll/{cabot_id}
+        Server-->>Cabot: コマンド（あれば）
     end
 
-    Dashboard->>Server: POST /send_command/{robot_id}
+    Dashboard->>Server: POST /send_command/{cabot_id}
     Server-->>Dashboard: コマンド送信確認
 
-    Robot->>Server: GET /poll/{robot_id}
-    Server-->>Robot: 新しいコマンド
+    Cabot->>Server: GET /poll/{cabot_id}
+    Server-->>Cabot: 新しいコマンド
 
-    Robot->>Server: POST /send/{robot_id}
-    Server-->>Robot: メッセージ受信確認
+    Cabot->>Server: POST /send/{cabot_id}
+    Server-->>Cabot: メッセージ受信確認
 
     Dashboard->>Server: GET /receive
     Server-->>Dashboard: 新しいメッセージ
@@ -114,8 +121,8 @@ sequenceDiagram
     Dashboard->>Server: POST /disconnect/dashboard
     Server-->>Dashboard: 切断確認
 
-    Robot->>Server: POST /disconnect/{robot_id}
-    Server-->>Robot: 切断確認
+    Cabot->>Server: POST /disconnect/{cabot_id}
+    Server-->>Cabot: 切断確認
 ```
 
 ## Docker
@@ -165,8 +172,13 @@ docker-compose down
 
 ### Web
 
-- サーバに内包
-
+- サーバ側に実装
+  - ローカル環境は http://localhost:8000
+  - クラウド環境は https://dev01-miraikan-dashboard-webapp.azurewebsites.net
+- ID、Passwordは、JSONファイルで管理とし、複数ユーザ管理できる
+  - 現状利用できるアカウント
+    - ID: user1
+    - Password: password1
 
 ## 参考）開発環境（Python仮想環境の構築）
 
@@ -207,8 +219,8 @@ deactivate
 
 ## TODO
 - [ ] メッセージ仕様
-- [ ] API認証
-- [ ] 管理画面認証
+- [x] API認証
+- [x] 管理画面認証
 - [ ] 管理画面UI設計
 - [ ] 管理項目の確定
 - [ ] クライアント側アクション実行
