@@ -108,40 +108,71 @@
         }
 
         function updateMessages(messages) {
-            messagesDiv.innerHTML = '<h2>メッセージ</h2>';
-            const messageList = document.createElement('ul');
+            if (!messages || messages.length === 0) return;
+
+            // メッセージリストがない場合は新規作成
+            let messageList = messagesDiv.querySelector('ul');
+            if (!messageList) {
+                messagesDiv.innerHTML = '<h2>メッセージ</h2>';
+                messageList = document.createElement('ul');
+                messagesDiv.appendChild(messageList);
+            }
+
+            // 新しいメッセージのみを追加
             messages.forEach(message => {
-                const li = document.createElement('li');
-                li.textContent = `${new Date(message.timestamp).toLocaleString()} - ${message.client_id}: ${message.message}`;
-                messageList.appendChild(li);
+                // メッセージのユニークなIDを作成
+                const messageId = `${message.timestamp}-${message.client_id}`;
+                
+                // 既存のメッセージをチェック
+                if (!messageList.querySelector(`[data-message-id="${messageId}"]`)) {
+                    const messageText = typeof message.message === 'object' ? 
+                        JSON.stringify(message.message) : message.message;
+
+                    const li = document.createElement('li');
+                    li.setAttribute('data-message-id', messageId);
+                    li.textContent = `${new Date(message.timestamp).toLocaleString()} - ${message.client_id}: ${messageText}`;
+                    messageList.appendChild(li);
+                }
             });
-            messagesDiv.appendChild(messageList);
+
+            // スクロールを最下部に移動
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
         }
 
         function updateEvents(events) {
             // イベント表示を更新
         }
 
-        async function fetchMessages() {
-            try {
-                const url = new URL('/receive', baseUrl);
-                const data = await fetchWithAuth(url);
-                if (data.messages && data.messages.length > 0) {
-                    data.messages.forEach(message => addMessage(message, "status"));
-                }
-            } catch (error) {
-                console.error('メッセージの取得中にエラーが発生しました:', error);
-            }
-        }
+        // async function fetchMessages() {
+        //     try {
+        //         const url = new URL('/receive', baseUrl);
+        //         const data = await fetchWithAuth(url);
+        //         if (data.messages && data.messages.length > 0) {
+        //             data.messages.forEach(message => addMessage(message, "status"));
+        //         }
+        //     } catch (error) {
+        //         console.error('メッセージの取得中にエラーが発生しました:', error);
+        //     }
+        // }
 
         function addMessage(message, type) {
-            const messageElement = document.createElement('div');
-            messageElement.textContent = message;
-            messageElement.className = type;
-            messagesDiv.appendChild(messageElement);
+            const messageList = messagesDiv.querySelector('ul') || (() => {
+                messagesDiv.innerHTML = '<h2>メッセージ</h2>';
+                const ul = document.createElement('ul');
+                messagesDiv.appendChild(ul);
+                return ul;
+            })();
+
+            const messageText = typeof message === 'object' ? 
+                JSON.stringify(message) : message;
+
+            const li = document.createElement('li');
+            li.className = type;
+            li.textContent = `${new Date().toLocaleString()} - ${messageText}`;
+            messageList.appendChild(li);
             messagesDiv.scrollTop = messagesDiv.scrollHeight;
         }
-
+ 
         async function fetchConnectedCabots() {
             try {
                 const url = new URL('/connected_cabots', baseUrl);
@@ -186,14 +217,25 @@
         async function sendCommand(cabotId, command) {
             try {
                 const url = new URL(`/send_command/${cabotId}`, baseUrl);
+                const commandData = {
+                    type: "command",
+                    data: {
+                        target: [cabotId],
+                        command: command,
+                        commandOption: {"ProcessName": "ROS"},
+                        timestamp: new Date().toISOString()
+                    }
+                };
+                
                 const options = {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
                         'X-API-Key': apiKey,
                     },
-                    body: JSON.stringify({ command: command }),
+                    body: JSON.stringify(commandData),
                 };
+                
                 const response = await fetch(url, options);
                 if (!response.ok) {
                     throw new Error(`API認証に失敗しました。ステータス: ${response.status}`);
@@ -207,7 +249,7 @@
             }
         }
 
-        setInterval(fetchMessages, 1000);
+        // setInterval(fetchMessages, 1000);
         setInterval(fetchConnectedCabots, 5000);
         setInterval(fetchUpdates, 5000);
     </script>

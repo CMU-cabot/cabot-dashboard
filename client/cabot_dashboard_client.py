@@ -32,12 +32,10 @@ class CabotDashboardClient:
         self.max_retries = 5
         self.retry_delay = 5  # seconds
         self.polling_interval = int(os.environ.get("CABOT_DASHBOARD_POLLING_INTERVAL", "1"))
-        self.command_queue = asyncio.Queue()
-        self.state_update_event = asyncio.Event()
 
     async def _make_request(self, session, method, endpoint, data=None):
         headers = {"X-API-Key": self.api_key}
-        url = f"{self.base_url}/{endpoint}"
+        url = f"{self.base_url}/api/client/{endpoint}"
         try:
             async with getattr(session, method)(url, headers=headers, json=data) as response:
                 return response.status, await response.json() if response.status == 200 else None
@@ -46,11 +44,16 @@ class CabotDashboardClient:
             return None, None
 
     async def send_status(self, session, status):
-        status_code, _ = await self._make_request(session, 'post', f"send/{self.cabot_id}", {"message": status})
+        status_code, response = await self._make_request(session, 'post', f"send/{self.cabot_id}", {"message": status})
         if status_code == 200:
             logger.info(f"CabotDashboardClient {self.cabot_id}: Status sent successfully: {status}")
+        elif status_code == 404:
+            logger.error(f"CabotDashboardClient {self.cabot_id}: Endpoint not found. URL: {self.base_url}/api/client/send/{self.cabot_id}")
+            # 接続が切れた可能性があるため、再接続を促す
+            return False
         else:
             logger.warning(f"CabotDashboardClient {self.cabot_id}: Failed to send status. Status code: {status_code}")
+        return True
 
     async def connect(self, session):
         for attempt in range(self.max_retries):
@@ -71,41 +74,107 @@ class CabotDashboardClient:
 
     async def handle_command(self, session, command):
         logger.info(f"CabotDashboardClient {self.cabot_id}: Processing command: {command}")
-        if command == "restart":
-            await self.send_status(session, "Restarting...")
-            logger.info(f"CabotDashboardClient {self.cabot_id} Restarting...")
-            await asyncio.sleep(10)  # Simulating restart time
-            logger.info(f"CabotDashboardClient {self.cabot_id} Restart complete.")
-            await self.send_status(session, "Restart complete.")
-        else:
-            logger.warning(f"CabotDashboardClient {self.cabot_id}: Unknown command: {command}")
+        
+        if not isinstance(command, dict):
+            logger.error(f"CabotDashboardClient {self.cabot_id}: Invalid command format: {command}")
+            await self.send_status(session, "Error: Invalid command format")
+            return
 
-    async def poll(self, session):
-        status_code, data = await self._make_request(session, 'get', f"poll/{self.cabot_id}")
-        if status_code == 200:
-            logger.info(f"CabotDashboardClient {self.cabot_id}: Received data from server: {data}")
-            if data['type'] == 'command':
-                await self.handle_command(session, data['data'])
-            elif data['type'] == 'state':
-                await self.handle_state_update(data['data'])
-        elif status_code == 404:
-            logger.warning(f"CabotDashboardClient {self.cabot_id}: Not connected to server. Attempting to reconnect...")
-            return False
+        command_type = command.get('command')
+        command_option = command.get('commandOption', {})
+
+        if command_type == "start":
+            process_name = command_option.get('ProcessName')
+            if not process_name:
+                logger.error(f"CabotDashboardClient {self.cabot_id}: ProcessName not specified in command")
+                await self.send_status(session, "Error: ProcessName not specified")
+                return
+
+            await self.send_status(session, f"Restarting {process_name}...")
+            try:
+                process = await asyncio.create_subprocess_exec(
+                    'sudo', 'systemctl', 'restart', process_name,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE
+                )
+                stdout, stderr = await process.communicate()
+                
+                if process.returncode == 0:
+                    logger.info(f"CabotDashboardClient {self.cabot_id}: Successfully restarted {process_name}")
+                    await self.send_status(session, f"{process_name} restart completed successfully")
+                else:
+                    error_msg = stderr.decode() if stderr else "Unknown error"
+                    logger.error(f"CabotDashboardClient {self.cabot_id}: Failed to restart {process_name}: {error_msg}")
+                    await self.send_status(session, f"Error restarting {process_name}: {error_msg}")
+            
+            except Exception as e:
+                logger.error(f"CabotDashboardClient {self.cabot_id}: Error executing systemctl: {str(e)}")
+                await self.send_status(session, f"Error executing restart command: {str(e)}")
+        
+        elif command_type == "stop":
+            process_name = command_option.get('ProcessName')
+            if not process_name:
+                logger.error(f"CabotDashboardClient {self.cabot_id}: ProcessName not specified in command")
+                await self.send_status(session, "Error: ProcessName not specified")
+                return
+
+            await self.send_status(session, f"Stopping {process_name}...")
+            # ここにプロセス停止のロジックを追加
+
+        elif command_type == "debug":
+            message = command_option.get('message', 'No message provided')
+            logger.debug(f"CabotDashboardClient {self.cabot_id}: Debug message received: {message}")
+            await self.send_status(session, f"Debug message processed: {message}")
+
         else:
-            logger.warning(f"CabotDashboardClient {self.cabot_id}: Unexpected response status: {status_code}")
-        return status_code == 200
+            logger.warning(f"CabotDashboardClient {self.cabot_id}: Unknown command type: {command_type}")
+            await self.send_status(session, f"Unknown command type: {command_type}")
 
     async def run(self):
+        """メインループ"""
         async with aiohttp.ClientSession() as session:
             while True:
-                if await self.connect(session):
-                    try:
-                        while await self.poll(session):
-                            await self.send_status(session, f"Status update from {self.cabot_id}")
-                            await asyncio.sleep(10)  # Status update every 10 seconds
-                    except Exception as e:
-                        logger.error(f"CabotDashboardClient {self.cabot_id}: Error during polling: {e}")
-                await asyncio.sleep(self.retry_delay)
+                try:
+                    if await self.connect(session):
+                        logger.info(f"CabotDashboardClient {self.cabot_id}: Connected to server")
+                        
+                        # ポーリングループ
+                        polling_count = 0
+                        while True:
+                            try:
+                                polling_count += 1
+                                logger.info(f"CabotDashboardClient {self.cabot_id}: Polling attempt {polling_count}")
+                                
+                                status_code, data = await self._make_request(session, 'get', f"poll/{self.cabot_id}")
+                                logger.debug(f"CabotDashboardClient {self.cabot_id}: Poll response - Status: {status_code}, Data: {data}")
+                                
+                                if status_code == 200:
+                                    logger.info(f"CabotDashboardClient {self.cabot_id}: Received command - {data}")
+                                    await self.handle_command(session, data)
+                                elif status_code == 404:
+                                    logger.warning(f"CabotDashboardClient {self.cabot_id}: Connection lost, attempting to reconnect...")
+                                    break
+                                else:
+                                    logger.warning(f"CabotDashboardClient {self.cabot_id}: Unexpected response status: {status_code}")
+                                
+                                # ステータス更新を送信
+                                await self.send_status(session, f"Status update {polling_count} from {self.cabot_id}")
+                                
+                                # ポーリング間隔を待機
+                                logger.debug(f"CabotDashboardClient {self.cabot_id}: Waiting {self.polling_interval} seconds before next poll")
+                                await asyncio.sleep(self.polling_interval)
+                                
+                            except Exception as e:
+                                logger.error(f"CabotDashboardClient {self.cabot_id}: Error during polling: {e}")
+                                break
+                    
+                    # 接続に失敗した場合は再試行
+                    logger.info(f"CabotDashboardClient {self.cabot_id}: Waiting {self.retry_delay} seconds before reconnection attempt")
+                    await asyncio.sleep(self.retry_delay)
+                    
+                except Exception as e:
+                    logger.error(f"CabotDashboardClient {self.cabot_id}: Unexpected error: {e}")
+                    await asyncio.sleep(self.retry_delay)
 
 async def main():
     cabots = [CabotDashboardClient(f"cabot{i}") for i in range(1, 4)]

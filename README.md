@@ -1,3 +1,16 @@
+## TODO
+- [ ] メッセージ仕様
+- [x] API認証
+- [ ] API認証（oAuth）
+- [x] 管理画面認証
+- [ ] 管理画面認証（EntraID）
+- [ ] 管理画面UI設計
+- [ ] 管理項目の確定
+- [ ] クライアント側アクション実行
+- [ ] サーバ側のデータ管理
+- [ ] 性能測定
+
+
 # cabot dashboard
 
 複数のロボットを管理する仕組み
@@ -77,10 +90,40 @@ graph TB
   - ログインするとダッシュボードの右上にIDを表示
   - ログアウトボタンでログアウトする
 
+## メッセージ仕様
+
+
+### メッセージ一覧
+
+### ロボットからのメッセージ
+
+ロボットからのメッセージは以下のJSON形式で送信されます:
+
+| 項番 | 操作 | Command | CommandOption |
+|------|------|---------|-----------|
+| 1 | ロボット停止 | stop | ROS |
+| 2 | ロボット再起動 | restart | ROS |
+| 3 | プロセスA再起動 | restart | ProcessA |
+| 4 | debug | debug | "test message" |
+
+### メッセージサンプル
+
+```json
+{
+  "target": ["cabot1", "cabot2"],
+  "command": "restart",
+  "commandOption": {"ProcessName": "ROS"},
+  "timestamp": "2024-06-27T12:34:56Z"
+}
+```
+
 ## プロトタイプ
 
 1. `cabot_dashboard_server.py` を実行してサーバーを起動します。
 2. `cabot_dashboard_client.py` を実行してロボットをシミュレートします。
+
+
+
 
 ### シーケンス図
 
@@ -189,6 +232,7 @@ docker-compose down
 ## 参考）開発環境（Python仮想環境の構築）
 
 ※dockerで動かす場合はここは不要
+
 Pythonの仮想環境を構築するコマンド。Pythonがすでにインストールされているという前提。
 
 1. 仮想環境を作成する：
@@ -223,12 +267,24 @@ pip install fastapi uvicorn websockets
 deactivate
 ```
 
-## TODO
-- [ ] メッセージ仕様
-- [x] API認証
-- [x] 管理画面認証
-- [ ] 管理画面UI設計
-- [ ] 管理項目の確定
-- [ ] クライアント側アクション実行
-- [ ] サーバ側のデータ管理
-- [ ] 性能測定
+
+
+cabot_dashboard_server/
+├── app/
+│   ├── __init__.py
+│   ├── main.py                    # FastAPIアプリケーションのエントリーポイント
+│   ├── config.py                  # 設定関連
+│   ├── dependencies.py                  # 設定関連
+│   ├── middleware/
+│   │   └── error_logging.py       # エラーロギングミドルウェア
+│   ├── routers/
+│   │   ├── client.py             # CaBot向けAPI
+│   │   ├── dashboard.py          # 管理画面向けAPI
+│   │   └── auth.py               # 認証関連API
+│   ├── services/
+│   │   ├── auth.py               # 認証ロジック
+│   │   ├── robot_state.py        # ロボット状態管理
+│   │   └── command_queue.py      # コマンドキュー管理
+│   └── utils/
+│       └── logger.py             # ロギング設定
+└── templates/                     # HTMLテンプレート

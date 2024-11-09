@@ -155,10 +155,28 @@ async def send_command(cabot_id: str, command: dict, api_key: str = Depends(get_
     if cabot_id not in connected_cabots:
         raise HTTPException(status_code=404, detail="Specified cabot is not connected")
     
-    await command_queues[cabot_id].put(command['command'])
-    state_update_events[cabot_id].set()
-    logger.info(f"Command '{command['command']}' added to queue for cabot {cabot_id}")
-    return {"status": "success", "message": f"Command queued for cabot {cabot_id}"}
+    try:
+        # メッセージ形式の検証
+        if not isinstance(command, dict) or 'type' not in command or 'data' not in command:
+            raise ValueError("Invalid command format")
+
+        command_data = command['data']
+        if not all(key in command_data for key in ['command', 'commandOption']):
+            raise ValueError("Missing required command fields")
+
+        # コマンドをキューに追加
+        await command_queues[cabot_id].put(command_data)
+        state_update_events[cabot_id].set()
+        
+        logger.info(f"Command '{command_data}' added to queue for cabot {cabot_id}")
+        return {"status": "success", "message": f"Command queued for cabot {cabot_id}"}
+    
+    except ValueError as e:
+        logger.error(f"Invalid command format for cabot {cabot_id}: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error processing command for cabot {cabot_id}: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 @app.get("/poll/{client_id}")
 async def poll(client_id: str, api_key: str = Depends(get_api_key)):
