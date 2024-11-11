@@ -169,7 +169,9 @@ sequenceDiagram
 
 起動
 ```
-docker-compose up -d --build
+# docker-compose up -d --build
+docker-compose up -d --build server
+docker-compose up -d --build client
 ```
 
 終了
@@ -185,11 +187,11 @@ docker-compose down
 
 2. Dockerイメージタグをつける
   ```
-  docker tag cabot-dashboard-server:latest pqdev01miraikan.azurecr.io/cabot-dashboard-server:0.1
+  docker tag local-image-name:tag azure-image-name:tag
   ```
 3. Azure Container Resistoryにpush
   ```
-  docker push pqdev01miraikan.azurecr.io/cabot-dashboard-server:0.1
+  docker push azure-image-name:tag
   ```
 4. Azure Web App for Containersにデプロイ
 
@@ -201,10 +203,11 @@ docker-compose down
   - WEBSITES_PORT = 8000
   - CABOT_DASHBOARD_LOG_LEVEL=INFO
   - CABOT_DASHBOARD_LOG_TO_FILE=false
-  - CABOT_DASHBOARD_API_KEY=a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6
+  - CABOT_DASHBOARD_API_KEY=[api key]
   - CABOT_DASHBOARD_SESSION_TIMEOUT=1800
   - CABOT_DASHBOARD_MAX_ROBOTS=20 # Maximum number of connected robots
   - CABOT_DASHBOARD_POLL_TIMEOUT=30 # Timeout period (seconds)
+
   - ~~ WEBSITES_WEBSOCKETS_ENABLED = 1 ~~
   - https://learn.microsoft.com/ja-jp/azure/app-service/reference-app-settings?source=recommendations&tabs=kudu%2Cdotnet
   - https://learn.microsoft.com/ja-jp/answers/questions/1602711/azureappservice-4
@@ -214,8 +217,8 @@ docker-compose down
 
 - ロボット側で Azure Container Registry から pull
 - 環境変数
-  - CABOT_DASHBOARD_SERVER_URL=http://dev01-miraikan-dashboard-webapp.azurewebsites.net
-  - CABOT_DASHBOARD_API_KEY=a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6
+  - CABOT_DASHBOARD_SERVER_URL=[URL]
+  - CABOT_DASHBOARD_API_KEY=[api key]
   - CABOT_DASHBOARD_LOG_LEVEL=INFO
   - CABOT_DASHBOARD_LOG_TO_FILE=false
   - CABOT_DASHBOARD_POLLING_INTERVAL=1
@@ -267,24 +270,3 @@ pip install fastapi uvicorn websockets
 deactivate
 ```
 
-
-
-cabot_dashboard_server/
-├── app/
-│   ├── __init__.py
-│   ├── main.py                    # FastAPIアプリケーションのエントリーポイント
-│   ├── config.py                  # 設定関連
-│   ├── dependencies.py                  # 設定関連
-│   ├── middleware/
-│   │   └── error_logging.py       # エラーロギングミドルウェア
-│   ├── routers/
-│   │   ├── client.py             # CaBot向けAPI
-│   │   ├── dashboard.py          # 管理画面向けAPI
-│   │   └── auth.py               # 認証関連API
-│   ├── services/
-│   │   ├── auth.py               # 認証ロジック
-│   │   ├── robot_state.py        # ロボット状態管理
-│   │   └── command_queue.py      # コマンドキュー管理
-│   └── utils/
-│       └── logger.py             # ロギング設定
-└── templates/                     # HTMLテンプレート
