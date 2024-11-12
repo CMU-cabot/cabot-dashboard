@@ -94,8 +94,14 @@ class CabotDashboardClient:
             await self.send_status(session, f"Restarting {process_name}...")
             try:
                 process = await asyncio.create_subprocess_exec(
-                    'sudo', 'systemctl', 'restart', "cron",
+                    # 'sudo', 'systemctl', 'restart', "cron",
+                    # 'sudo', 'systemctl', 'reboot',
+                    # 'sudo', 'systemctl', 'poweroff',
                     #'systemctl', '--user', 'restart', process_name,
+                    'systemctl', '--user', 'restart', 'myapp',
+                    # 'systemctl', '--user', 'start', 'cabot',
+                    # 'systemctl', '--user', 'stop', 'cabot',
+                    # 'systemctl', '--user', 'is-active', 'cabot',
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE
                 )

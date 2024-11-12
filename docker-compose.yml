@@ -19,16 +19,25 @@ services:
   client:
     build: ./cabot_dashboard_client
     volumes:
+      #for systemctl
       - /run/systemd/system:/run/systemd/system
       - /var/run/dbus/system_bus_socket:/var/run/dbus/system_bus_socket
       - /sys/fs/cgroup:/sys/fs/cgroup
+      # for systemctl --user
+      - /run/user:/run/user
+      - /usr/bin/docker:/usr/bin/docker
+      - /usr/local/bin/docker-compose:/usr/local/bin/docker-compose
+      - /var/run/docker.sock:/var/run/docker.sock
+    #required fo systemctl
+    privileged: true
     environment:
+      - DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus
       # - CABOT_DASHBOARD_SERVER_URL=http://localhost:8000
       # - CABOT_DASHBOARD_API_KEY=[API KEY]
       - CABOT_DASHBOARD_LOG_LEVEL=INFO
       - CABOT_DASHBOARD_LOG_TO_FILE=false
       - CABOT_DASHBOARD_POLLING_INTERVAL=1
-      # - CABOT_DASHBOARD_CABOT_ID=[cabotid]
+      # - CABOT_DASHBOARD_CABOT_ID=[cabot-id]
     network_mode: host
     logging:
       driver: "json-file"
