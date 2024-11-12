@@ -1,5 +1,6 @@
 import aiohttp
 import asyncio
+import argparse
 import logging
 import os
 from aiohttp import ClientError, ClientConnectorError, ServerDisconnectedError
@@ -49,7 +50,7 @@ class CabotDashboardClient:
             logger.info(f"CabotDashboardClient {self.cabot_id}: Status sent successfully: {status}")
         elif status_code == 404:
             logger.error(f"CabotDashboardClient {self.cabot_id}: Endpoint not found. URL: {self.base_url}/api/client/send/{self.cabot_id}")
-            # 接続が切れた可能性があるため、再接続を促す
+            # Connection may be lost, trigger reconnection
             return False
         else:
             logger.warning(f"CabotDashboardClient {self.cabot_id}: Failed to send status. Status code: {status_code}")
@@ -93,7 +94,8 @@ class CabotDashboardClient:
             await self.send_status(session, f"Restarting {process_name}...")
             try:
                 process = await asyncio.create_subprocess_exec(
-                    'sudo', 'systemctl', 'restart', process_name,
+                    'sudo', 'systemctl', 'restart', "cron",
+                    #'systemctl', '--user', 'restart', process_name,
                     stdout=asyncio.subprocess.PIPE,
                     stderr=asyncio.subprocess.PIPE
                 )
@@ -119,7 +121,7 @@ class CabotDashboardClient:
                 return
 
             await self.send_status(session, f"Stopping {process_name}...")
-            # ここにプロセス停止のロジックを追加
+            # Add process stop logic here
 
         elif command_type == "debug":
             message = command_option.get('message', 'No message provided')
@@ -131,14 +133,14 @@ class CabotDashboardClient:
             await self.send_status(session, f"Unknown command type: {command_type}")
 
     async def run(self):
-        """メインループ"""
+        """Main loop"""
         async with aiohttp.ClientSession() as session:
             while True:
                 try:
                     if await self.connect(session):
                         logger.info(f"CabotDashboardClient {self.cabot_id}: Connected to server")
                         
-                        # ポーリングループ
+                        # Polling loop
                         polling_count = 0
                         while True:
                             try:
@@ -157,10 +159,10 @@ class CabotDashboardClient:
                                 else:
                                     logger.warning(f"CabotDashboardClient {self.cabot_id}: Unexpected response status: {status_code}")
                                 
-                                # ステータス更新を送信
+                                # Send status update
                                 await self.send_status(session, f"Status update {polling_count} from {self.cabot_id}")
                                 
-                                # ポーリング間隔を待機
+                                # Wait for polling interval
                                 logger.debug(f"CabotDashboardClient {self.cabot_id}: Waiting {self.polling_interval} seconds before next poll")
                                 await asyncio.sleep(self.polling_interval)
                                 
@@ -168,7 +170,7 @@ class CabotDashboardClient:
                                 logger.error(f"CabotDashboardClient {self.cabot_id}: Error during polling: {e}")
                                 break
                     
-                    # 接続に失敗した場合は再試行
+                    # Retry if connection failed
                     logger.info(f"CabotDashboardClient {self.cabot_id}: Waiting {self.retry_delay} seconds before reconnection attempt")
                     await asyncio.sleep(self.retry_delay)
                     
@@ -177,8 +179,27 @@ class CabotDashboardClient:
                     await asyncio.sleep(self.retry_delay)
 
 async def main():
-    cabots = [CabotDashboardClient(f"cabot{i}") for i in range(1, 4)]
-    await asyncio.gather(*(cabot.run() for cabot in cabots))
+    parser = argparse.ArgumentParser(description='CaBot Dashboard Client')
+    parser.add_argument('-s', '--simulate', type=int, help='Simulation mode: specify number of clients to generate')
+    args = parser.parse_args()
+
+    if args.simulate:
+        # Simulation mode: generate multiple clients
+        clients = []
+        for i in range(args.simulate):
+            cabot_id = f"cabot_{i+1}"
+            client = CabotDashboardClient(cabot_id)
+            clients.append(client.run())
+        await asyncio.gather(*clients)
+    else:
+        # Normal mode: get CABOT_ID from environment variable
+        cabot_id = os.environ.get("CABOT_DASHBOARD_CABOT_ID")
+        if not cabot_id:
+            logger.error("Environment variable CABOT_ID is not set")
+            return
+        
+        client = CabotDashboardClient(cabot_id)
+        await client.run()
 
 if __name__ == "__main__":
     try:

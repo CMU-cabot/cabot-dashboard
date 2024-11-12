@@ -4,45 +4,37 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - CABOT_DASHBOARD_LOG_LEVEL=DEBUG
+      - CABOT_DASHBOARD_LOG_LEVEL=INFO
       - CABOT_DASHBOARD_LOG_TO_FILE=false
-      - CABOT_DASHBOARD_API_KEY=[api key]
+      # - CABOT_DASHBOARD_API_KEY=[API KEY]
       - CABOT_DASHBOARD_SESSION_TIMEOUT=1800
       - CABOT_DASHBOARD_MAX_ROBOTS=20 # Maximum number of connected robots
       - CABOT_DASHBOARD_POLL_TIMEOUT=600 # Timeout period (seconds)
-    networks:
-      - cabot-network
     logging:
       driver: "json-file"
       options:
         max-size: "200k"
         max-file: "10"
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-      start_period: 5s
 
   client:
-    build: ./client
+    build: ./cabot_dashboard_client
+    volumes:
+      - /run/systemd/system:/run/systemd/system
+      - /var/run/dbus/system_bus_socket:/var/run/dbus/system_bus_socket
+      - /sys/fs/cgroup:/sys/fs/cgroup
     environment:
-      - CABOT_DASHBOARD_SERVER_URL=http://server:8000
-      - CABOT_DASHBOARD_API_KEY=[api key]
-      - CABOT_DASHBOARD_LOG_LEVEL=DEBUG
+      # - CABOT_DASHBOARD_SERVER_URL=http://localhost:8000
+      # - CABOT_DASHBOARD_API_KEY=[API KEY]
+      - CABOT_DASHBOARD_LOG_LEVEL=INFO
       - CABOT_DASHBOARD_LOG_TO_FILE=false
       - CABOT_DASHBOARD_POLLING_INTERVAL=1
-    networks:
-      - cabot-network
+      # - CABOT_DASHBOARD_CABOT_ID=[cabotid]
+    network_mode: host
     logging:
       driver: "json-file"
       options:
         max-size: "200k"
         max-file: "10"
-
-networks:
-  cabot-network:
-    driver: bridge
 
 volumes:
   logs:
