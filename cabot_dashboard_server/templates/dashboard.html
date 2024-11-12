@@ -14,7 +14,8 @@
             <input type="submit" value="Logout">
         </form>
 
-        <div class="messages-container">
+        <div id="cabots"></div>
+        <div id="messages" style="display: none;" class="messages-container">
             <h2>Messages</h2>
             <div class="message-controls">
                 <button onclick="clearMessages()">Clear Messages</button>
@@ -22,12 +23,12 @@
             </div>
             <div id="messages"></div>
         </div>
-        <div id="cabots"></div>
     </div>
 
     <script>
         const baseUrl = '{{ base_url }}';
         const apiKey = '{{ api_key }}';
+        const debugMode = '{{ debug_mode }}' === 'True';
     </script>
     <script src="{{ url_for('static', path='/js/dashboard.js') | replace('http://', '//') }}"></script>
 </body>

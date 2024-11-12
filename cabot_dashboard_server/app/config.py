@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     max_robots: int = int(os.getenv("CABOT_DASHBOARD_MAX_ROBOTS", 5))
     max_messages: int = 100
     polling_timeout: float = float(os.getenv("CABOT_DASHBOARD_POLL_TIMEOUT", 240))
+    debug_mode: bool = os.getenv("CABOT_DASHBOARD_DEBUG_MODE", "false").lower() == "true"
 
     class Config:
         env_prefix = "CABOT_DASHBOARD_"

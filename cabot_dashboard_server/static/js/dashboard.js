@@ -49,13 +49,17 @@ async function fetchUpdates() {
 }
 
 function updateDashboard(data) {
-    updateRobotList(data.robots);
-    updateMessages(data.messages);
-    // updateEvents(data.events);  // Implement if event updates are needed
-}
-
-function updateRobotList(robots) {
-    // Use or modify existing updateCabotList function
+    if (debugMode) {
+        messagesDiv.style.display = 'block';
+    } else {
+        messagesDiv.style.display = 'none';
+    }
+    if (data.cabots) {
+        updateCabotList(data.cabots);
+    }
+    if (data.messages) {
+        updateMessages(data.messages);
+    }
 }
 
 function updateMessages(messages) {
@@ -91,6 +95,7 @@ function updateEvents(events) {
 }
 
 function addMessage(message, type) {
+    if (!debugMode) return;
     if (!isMessageUpdateEnabled) return;
     const messageList = messagesDiv.querySelector('ul') || (() => {
         const ul = document.createElement('ul');
@@ -106,17 +111,6 @@ function addMessage(message, type) {
     li.textContent = `${new Date().toLocaleString()} - ${messageText}`;
     messageList.appendChild(li);
     messagesDiv.scrollTop = messagesDiv.scrollHeight;
-}
-
-async function fetchConnectedCabots() {
-    try {
-        const data = await fetchWithAuth('/connected_cabots');
-        if (data && data.cabots) {
-            updateCabotList(data.cabots);
-        }
-    } catch (error) {
-        console.error('Error occurred while fetching Cabot list:', error);
-    }
 }
 
 function updateCabotList(cabots) {
@@ -144,14 +138,17 @@ function updateCabotList(cabots) {
         // Action buttons cell
         const actionCell = row.insertCell();
         if (cabot.connected) {
-            actionCell.innerHTML = `
+            const buttons = `
                 <button onclick="sendCommand('${cabot.id}', 'ros-start')">ROS Start</button>
                 <button onclick="sendCommand('${cabot.id}', 'ros-stop')">ROS Stop</button>
                 <button onclick="sendCommand('${cabot.id}', 'system-reboot')">Reboot</button>
                 <button onclick="sendCommand('${cabot.id}', 'system-poweroff')">Power Off</button>
-                <button onclick="sendCommand('${cabot.id}', 'debug1')">Debug1</button>
-                <button onclick="sendCommand('${cabot.id}', 'debug2')">Debug2</button>
+                ${debugMode ? `
+                    <button onclick="sendCommand('${cabot.id}', 'debug1')">Debug1</button>
+                    <button onclick="sendCommand('${cabot.id}', 'debug2')">Debug2</button>
+                ` : ''}
             `;
+            actionCell.innerHTML = buttons;
         } else {
             actionCell.innerHTML = '<span class="disabled">No Actions Available</span>';
         }
@@ -190,7 +187,7 @@ async function sendCommand(cabotId, command) {
         addMessage(`Command sent: ${cabotId} - ${command}`, "status");
         
         // Update Cabot list after sending command
-        await fetchConnectedCabots();
+        // await fetchConnectedCabots();
     } catch (error) {
         console.error('Error occurred while sending command:', error);
         addMessage(`Command send error: ${error.message}`, "error");
@@ -212,5 +209,4 @@ function toggleMessages() {
     toggleBtn.classList.toggle('button-disabled', !isMessageUpdateEnabled);
 }
 
-setInterval(fetchConnectedCabots, 5000);
-setInterval(fetchUpdates, 7000);
+setInterval(fetchUpdates, 2000);

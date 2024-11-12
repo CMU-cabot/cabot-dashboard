@@ -16,7 +16,16 @@ class RobotManager:
 
     def get_connected_cabots_list(self) -> List[str]:
         """Get list of connected CaBots"""
-        return list(self.robots.keys())
+        cabot_list = []
+        for robot_id, info in self.robots.items():
+            cabot_list.append({
+                'id': robot_id,
+                'status': info.get('status', 'unknown'),
+                'last_poll': info.get('last_poll'),
+                'message': info.get('message', ''),
+                'connected': info.get('connected', False)
+            })
+        return cabot_list
 
     def add_robot(self, robot_id: str, info: dict) -> None:
         """Add or update robot"""

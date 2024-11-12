@@ -10,6 +10,7 @@ services:
       - CABOT_DASHBOARD_SESSION_TIMEOUT=1800
       - CABOT_DASHBOARD_MAX_ROBOTS=20 # Maximum number of connected robots
       - CABOT_DASHBOARD_POLL_TIMEOUT=600 # Timeout period (seconds)
+      - CABOT_DASHBOARD_DEBUG_MODE=false
     logging:
       driver: "json-file"
       options:
