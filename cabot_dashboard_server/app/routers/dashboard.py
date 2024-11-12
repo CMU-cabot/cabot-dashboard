@@ -4,7 +4,7 @@ from fastapi.templating import Jinja2Templates
 from app.services.auth import AuthService
 from app.services.robot_state import RobotStateManager
 from app.services.command_queue import CommandQueueManager
-from app.dependencies import get_auth_service, get_api_key, get_robot_manager, get_command_queue_manager, get_robot_state_manager
+from app.dependencies import get_auth_service, get_api_key, get_command_queue_manager, get_robot_state_manager
 from app.utils.logger import get_logger
 from app.config import settings
 from typing import Dict
@@ -38,28 +38,17 @@ async def dashboard_page(
     except ValueError:
         return RedirectResponse(url="/login")
 
-@router.get("/api/dashboard/status")
-async def get_dashboard_status(
-    robot_manager = Depends(get_robot_manager),
-    api_key: str = Depends(get_api_key)
-):
-    """Get dashboard status information"""
-    return {
-        "robots": robot_manager.get_robot_info(),
-        "messages": robot_manager.messages
-    }
-
 @router.get("/receive")
 async def receive_updates(
     api_key: str = Depends(get_api_key),
-    robot_manager = Depends(get_robot_manager)
+    robot_manager = Depends(get_robot_state_manager)
 ):
     """Get robot information and message updates"""
     try:
-        robot_info = robot_manager.get_robot_info()
+        # robot_info = robot_manager.get_robot_info()
         connected_cabot_list = robot_manager.get_connected_cabots_list()
         return {
-            "robots": robot_info,
+            # "robots": robot_info,
             "messages": robot_manager.messages,
             "events": [],
             "cabots": connected_cabot_list
@@ -72,7 +61,7 @@ async def receive_updates(
 async def send_command(
     robot_id: str,
     command: Dict,
-    robot_manager: RobotStateManager = Depends(get_robot_manager),
+    robot_manager: RobotStateManager = Depends(get_robot_state_manager),
     command_queue_manager: CommandQueueManager = Depends(get_command_queue_manager),
     api_key: str = Depends(get_api_key)
 ):

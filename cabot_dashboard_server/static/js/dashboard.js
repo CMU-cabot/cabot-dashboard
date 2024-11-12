@@ -3,7 +3,6 @@ let displayedMessageIds = new Set();
 
 const messagesDiv = document.getElementById('messages');
 const cabotsDiv = document.getElementById('cabots');
-const connectionStatus = document.getElementById('connection-status');
 
 async function fetchWithAuth(url, options = {}) {
     const defaultOptions = {
@@ -13,7 +12,7 @@ async function fetchWithAuth(url, options = {}) {
         },
         timeout: 5000
     };
-    
+
     const mergedOptions = { 
         ...defaultOptions, 
         ...options,
@@ -23,37 +22,20 @@ async function fetchWithAuth(url, options = {}) {
         }
     };
 
-    try {
-        const response = await fetch(url, mergedOptions);
-        if (!response.ok) {
-            throw new Error(`HTTP Error! Status: ${response.status}`);
-        }
-        return await response.json();
-    } catch (error) {
-        if (error.name === 'TimeoutError') {
-            addMessage('接続タイムアウト: サーバーに接続できません', "timeout");
-        } else {
-            addMessage(`接続エラー: ${error.message}`, "error");
-        }
-        throw error;
+    const response = await fetch(url, mergedOptions);
+    if (!response.ok) {
+        throw new Error(`HTTP Error! Status: ${response.status}`);
     }
+    return await response.json();
 }
 
 async function fetchUpdates() {
-    try {
-        const data = await fetchWithAuth('/receive');
-        updateDashboard(data);
-    } catch (error) {
-        console.error('Error occurred while fetching updates:', error);
-    }
+    const data = await fetchWithAuth('/receive');
+    updateDashboard(data);
 }
 
 function updateDashboard(data) {
-    if (debugMode) {
-        messagesDiv.style.display = 'block';
-    } else {
-        messagesDiv.style.display = 'none';
-    }
+    messagesDiv.style.display = debugMode ? 'block' : 'none';
     if (data.cabots) {
         updateCabotList(data.cabots);
     }
@@ -65,9 +47,8 @@ function updateDashboard(data) {
 function updateMessages(messages) {
     if (!isMessageUpdateEnabled || !messages || messages.length === 0) return;
 
-    let messageList = messagesDiv.querySelector('ul');
-    if (!messageList) {
-        messageList = document.createElement('ul');
+    let messageList = messagesDiv.querySelector('ul') || document.createElement('ul');
+    if (!messagesDiv.contains(messageList)) {
         messagesDiv.appendChild(messageList);
     }
 
@@ -90,18 +71,12 @@ function updateMessages(messages) {
     messagesDiv.scrollTop = messagesDiv.scrollHeight;
 }
 
-function updateEvents(events) {
-    // Update event display
-}
-
 function addMessage(message, type) {
-    if (!debugMode) return;
     if (!isMessageUpdateEnabled) return;
-    const messageList = messagesDiv.querySelector('ul') || (() => {
-        const ul = document.createElement('ul');
-        messagesDiv.appendChild(ul);
-        return ul;
-    })();
+    const messageList = messagesDiv.querySelector('ul') || document.createElement('ul');
+    if (!messagesDiv.contains(messageList)) {
+        messagesDiv.appendChild(messageList);
+    }
 
     const messageText = typeof message === 'object' ? 
         JSON.stringify(message) : message;
@@ -130,34 +105,29 @@ function updateCabotList(cabots) {
         const row = table.insertRow();
         row.insertCell().textContent = cabot.id || 'Unknown';
         
-        // Status cell
         const statusCell = row.insertCell();
         statusCell.textContent = cabot.connected ? 'Connected' : 'Disconnected';
         statusCell.className = cabot.connected ? 'status-connected' : 'status-disconnected';
         
-        // Action buttons cell
         const actionCell = row.insertCell();
         if (cabot.connected) {
-            const buttons = `
-                <button onclick="sendCommand('${cabot.id}', 'ros-start')">ROS Start</button>
-                <button onclick="sendCommand('${cabot.id}', 'ros-stop')">ROS Stop</button>
-                <button onclick="sendCommand('${cabot.id}', 'system-reboot')">Reboot</button>
-                <button onclick="sendCommand('${cabot.id}', 'system-poweroff')">Power Off</button>
+            actionCell.innerHTML = `
+                <button onclick="sendCommand('${cabot.id}', 'ros-start')" ${cabot.processing ? 'disabled' : ''}>ROS Start</button>
+                <button onclick="sendCommand('${cabot.id}', 'ros-stop')" ${cabot.processing ? 'disabled' : ''}>ROS Stop</button>
+                <button onclick="sendCommand('${cabot.id}', 'system-reboot')" ${cabot.processing ? 'disabled' : ''}>Reboot</button>
+                <button onclick="sendCommand('${cabot.id}', 'system-poweroff')" ${cabot.processing ? 'disabled' : ''}>Power Off</button>
                 ${debugMode ? `
-                    <button onclick="sendCommand('${cabot.id}', 'debug1')">Debug1</button>
-                    <button onclick="sendCommand('${cabot.id}', 'debug2')">Debug2</button>
+                    <button onclick="sendCommand('${cabot.id}', 'debug1')" ${cabot.processing ? 'disabled' : ''}>Debug1</button>
+                    <button onclick="sendCommand('${cabot.id}', 'debug2')" ${cabot.processing ? 'disabled' : ''}>Debug2</button>
                 ` : ''}
             `;
-            actionCell.innerHTML = buttons;
         } else {
             actionCell.innerHTML = '<span class="disabled">No Actions Available</span>';
         }
         
-        // Last poll time cell
         const lastPollCell = row.insertCell();
         lastPollCell.textContent = formatDateTime(cabot.last_poll) || 'Unknown';
         
-        // Message cell
         row.insertCell().textContent = cabot.message || '';
     });
     
@@ -171,27 +141,23 @@ function formatDateTime(dateTimeString) {
 }
 
 async function sendCommand(cabotId, command) {
-    try {
-        const commandData = {
-            command: command,
-            commandOption: {}
-        };
-        
-        const options = {
-            method: 'POST',
-            body: JSON.stringify(commandData)
-        };
-        
-        const data = await fetchWithAuth(`/send_command/${cabotId}`, options);
-        console.log('Command sent:', data);
-        addMessage(`Command sent: ${cabotId} - ${command}`, "status");
-        
-        // Update Cabot list after sending command
-        // await fetchConnectedCabots();
-    } catch (error) {
-        console.error('Error occurred while sending command:', error);
-        addMessage(`Command send error: ${error.message}`, "error");
-    }
+    const actionButtons = document.querySelectorAll(`button[onclick*="'${cabotId}'"]`);
+    actionButtons.forEach(button => {
+        button.disabled = true;
+    });
+
+    const commandData = {
+        command: command,
+        commandOption: {}
+    };
+    
+    const options = {
+        method: 'POST',
+        body: JSON.stringify(commandData)
+    };
+    
+    await fetchWithAuth(`/send_command/${cabotId}`, options);
+    addMessage(`Command sent: ${cabotId} - ${command}`, "status");
 }
 
 function clearMessages() {

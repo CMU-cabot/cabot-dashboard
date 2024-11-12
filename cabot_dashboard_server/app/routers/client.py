@@ -3,7 +3,6 @@ from app.services.robot_state import RobotStateManager
 from app.services.command_queue import CommandQueueManager
 from app.dependencies import (
     get_api_key,
-    get_robot_manager,
     get_command_queue_manager,
     get_robot_state_manager
 )
@@ -12,13 +11,11 @@ import asyncio
 
 router = APIRouter(tags=["client"])
 
-robot_state_manager = RobotStateManager()
-command_queue_manager = CommandQueueManager()
-
 @router.post("/connect/{client_id}")
 async def connect(
     client_id: str,
-    robot_manager: RobotStateManager = Depends(get_robot_manager),
+    robot_manager: RobotStateManager = Depends(get_robot_state_manager),
+    command_queue_manager: CommandQueueManager = Depends(get_command_queue_manager),
     api_key: str = Depends(get_api_key)
 ):
     try:
@@ -38,13 +35,16 @@ async def connect(
 async def send_command(
     cabot_id: str,
     command: dict,
+    robot_manager: RobotStateManager = Depends(get_robot_state_manager),
+    command_queue_manager: CommandQueueManager = Depends(get_command_queue_manager),
     api_key: str = Depends(get_api_key)
 ):
     try:
-        if cabot_id not in robot_state_manager.connected_cabots:
+        if cabot_id not in robot_manager.connected_cabots:
             raise HTTPException(status_code=404, detail="Specified cabot is not connected")
         
         await command_queue_manager.add_command(cabot_id, command)
+        logger.info(f"Command queued for cabot {cabot_id}: {command}")
         return {"status": "success", "message": f"Command queued for cabot {cabot_id}"}
     except ValueError as e:
         logger.error(f"Invalid command format for cabot {cabot_id}: {e}")
@@ -56,36 +56,38 @@ async def send_command(
 @router.get("/poll/{client_id}")
 async def poll(
     client_id: str,
-    robot_manager: RobotStateManager = Depends(get_robot_manager),
+    robot_manager: RobotStateManager = Depends(get_robot_state_manager),
     command_queue_manager: CommandQueueManager = Depends(get_command_queue_manager),
     api_key: str = Depends(get_api_key)
 ):
+    if client_id not in robot_manager.connected_cabots:
+        logger.warning(f"Poll attempted for disconnected client {client_id}")
+        raise HTTPException(status_code=404, detail="Robot not connected")
     try:
-        if client_id not in robot_manager.connected_cabots:
-            raise HTTPException(status_code=404, detail="Robot not connected")
-
-        try:
-            result = await command_queue_manager.wait_for_update(client_id)
-            return result
-        except asyncio.TimeoutError:
-            return Response(status_code=204)
-            
+        robot_manager.update_robot_polling(client_id)
+        result = await command_queue_manager.wait_for_update(client_id)
+        return result
+    except asyncio.TimeoutError:
+        return Response(status_code=204)
     except Exception as e:
         logger.error(f"Error in poll for {client_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+    finally:
+        robot_manager.update_robot_status(client_id, {"status": "disconnected"})
 
 @router.post("/send/{client_id}")
 async def send_status(
     client_id: str,
     status: dict,
-    robot_state_manager: RobotStateManager = Depends(get_robot_state_manager)
+    robot_manager: RobotStateManager = Depends(get_robot_state_manager)
 ):
-    if client_id not in robot_state_manager.connected_cabots:
+    if client_id not in robot_manager.connected_cabots:
+        logger.warning(f"Send status attempted for disconnected client {client_id}")
         raise HTTPException(status_code=404, detail="Specified cabot is not connected")
     
     try:
         message = status.get("message", "")
-        robot_state_manager.update_client_status(client_id, message)
+        robot_manager.update_robot_message(client_id, message)
         logger.info(f"Received status from {client_id}: {message}")
         return {"status": "success"}
     except Exception as e:
