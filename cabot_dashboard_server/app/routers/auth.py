@@ -9,7 +9,7 @@ templates = Jinja2Templates(directory="templates")
 
 @router.get("/login", response_class=HTMLResponse)
 async def login_page(request: Request):
-    """ログインページを表示"""
+    """Display login page"""
     return templates.TemplateResponse("login.html", {
         "request": request,
         "error": None
@@ -24,11 +24,11 @@ async def login(
     form = await request.form()
     username = form.get("username")
     password = form.get("password")
-    # デバッグ用のログを追加
-    print(f"Login attempt for user: {username}")  # 開発時のみ使用
+    # Add debug log
+    print(f"Login attempt for user: {username}")  # For development only
     if auth_service.validate_user(username, password):
         session_token = auth_service.create_session(username)
-        response = RedirectResponse(url="/dashboard", status_code=303)  # responseオブジェクトを上書き
+        response = RedirectResponse(url="/dashboard", status_code=303)  # Override response object
         response.set_cookie(
             key="session_token",
             value=session_token,
@@ -36,7 +36,7 @@ async def login(
             secure=True,
             samesite="strict"
         )
-        return response  # 修正したresponseを返す
+        return response  # Return modified response
         # return RedirectResponse(url="/dashboard", status_code=303)
     
     return templates.TemplateResponse(
@@ -50,7 +50,7 @@ async def logout(
     session_token: str = Cookie(None),
     auth_service: AuthService = Depends(get_auth_service)
 ):
-    """ログアウト処理"""
+    """Logout process"""
     if session_token:
         auth_service.remove_session(session_token)
     response = RedirectResponse(url="/", status_code=303)
@@ -63,12 +63,12 @@ async def root(
     session_token: str = Cookie(None),
     auth_service: AuthService = Depends(get_auth_service)
 ):
-    """ルートページ"""
+    """Root page"""
     try:
         if session_token and auth_service.validate_session(session_token, timeout=3600):
             return RedirectResponse(url="/dashboard")
     except ValueError:
-        # 認証エラーの場合はログインページを表示
+        # Show login page on authentication error
         pass
 
     return templates.TemplateResponse("login.html", {

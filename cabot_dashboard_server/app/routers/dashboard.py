@@ -20,7 +20,7 @@ async def dashboard_page(
     session_token: str = Cookie(None),
     auth_service: AuthService = Depends(get_auth_service)
 ):
-    """ダッシュボードページを表示"""
+    """Display dashboard page"""
     try:
         if not session_token or not auth_service.validate_session(session_token, timeout=3600):
             return RedirectResponse(url="/login")
@@ -30,19 +30,19 @@ async def dashboard_page(
             {
                 "request": request,
                 "base_url": request.base_url,
-                "api_key": settings.api_key  # 直接設定ファイルからAPIキーを取得
+                "api_key": settings.api_key  # Get API key directly from settings
             }
         )
     except ValueError:
         return RedirectResponse(url="/login")
 
-# APIエンドポイント
+# API Endpoints
 @router.get("/api/dashboard/status")
 async def get_dashboard_status(
     robot_manager = Depends(get_robot_manager),
     api_key: str = Depends(get_api_key)
 ):
-    """ダッシュボードのステータス情報を取得"""
+    """Get dashboard status information"""
     return {
         "robots": robot_manager.get_robot_info(),
         "messages": robot_manager.messages
@@ -53,7 +53,7 @@ async def receive_updates(
     api_key: str = Depends(get_api_key),
     robot_manager = Depends(get_robot_manager)
 ):
-    """ロボット情報とメッセージの更新を取得"""
+    """Get robot information and message updates"""
     try:
         robot_info = robot_manager.get_robot_info()
         return {
@@ -70,7 +70,7 @@ async def get_connected_cabots(
     api_key: str = Depends(get_api_key),
     robot_manager = Depends(get_robot_manager)
 ):
-    """接続済みCaBotの一覧を取得"""
+    """Get list of connected CaBots"""
     try:
         connected_cabot_list = robot_manager.get_connected_cabots_list()
         return {"cabots": connected_cabot_list}
@@ -87,17 +87,17 @@ async def send_command(
     api_key: str = Depends(get_api_key)
 ):
     try:
-        # クライアントが接続済みか確認
+        # Check if client is connected
         if robot_id not in robot_manager.connected_cabots:
             raise HTTPException(
                 status_code=404,
                 detail=f"Robot {robot_id} is not connected"
             )
 
-        # コマンドキューを初期化（まだ初期化されていない場合）
+        # Initialize command queue if not already initialized
         await command_queue_manager.initialize_client(robot_id)
         
-        # コマンドを送信
+        # Send command
         await command_queue_manager.add_command(robot_id, command)
         logger.info(f"Command sent to {robot_id}: {command}")
         
@@ -113,5 +113,5 @@ async def get_messages(
     limit: int = 100,
     robot_state_manager: RobotStateManager = Depends(get_robot_state_manager)
 ):
-    """メッセージ履歴を取得"""
+    """Get message history"""
     return robot_state_manager.get_messages(limit)

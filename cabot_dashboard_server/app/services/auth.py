@@ -37,6 +37,6 @@ class AuthService:
         return user_id
 
     def remove_session(self, session_token: str) -> None:
-        """セッションを削除する"""
+        """Remove the session"""
         if session_token in self.sessions:
             del self.sessions[session_token]

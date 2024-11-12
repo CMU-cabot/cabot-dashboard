@@ -1,300 +1,34 @@
 <!DOCTYPE html>
-<html lang="ja">
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ダッシュボード</title>
-    <style>
-        body {
-            font-family: 'Hiragino Sans', 'Meiryo', sans-serif;
-            margin: 0;
-            padding: 20px;
-            background-color: #f0f0f0;
-        }
-        #dashboard {
-            background-color: white;
-            border-radius: 5px;
-            padding: 20px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            position: relative;
-        }
-        #logout-form {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-        }
-        #messages, #cabots {
-            height: 200px;
-            overflow-y: auto;
-            border: 1px solid #ddd;
-            padding: 10px;
-            margin-bottom: 20px;
-        }
-        .status { margin-bottom: 5px; }
-        .error { color: red; }
-        button { margin-right: 10px; }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-        }
-        th, td {
-            border: 1px solid #ddd;
-            padding: 8px;
-            text-align: left;
-        }
-        th { background-color: #f2f2f2; }
-        .warning {
-            color: orange;
-        }
-        .timeout {
-            color: red;
-        }
-    </style>
+    <title>Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='/css/dashboard.css') | replace('http://', '//') }}">
 </head>
 <body>
     <div id="dashboard">
-        <h1>Cabotダッシュボード</h1>
-        <p>ようこそ、{{ user }}さん</p>
+        <h1>Cabot Dashboard</h1>
+        <p>Welcome, {{ user }}</p>
         <form action="/logout" method="post">
-            <input type="submit" value="ログアウト">
+            <input type="submit" value="Logout">
         </form>
-  
-        <div id="messages"></div>
+
+        <div class="messages-container">
+            <h2>Messages</h2>
+            <div class="message-controls">
+                <button onclick="clearMessages()">Clear Messages</button>
+                <button id="toggleMessagesBtn" onclick="toggleMessages()">Stop Messages</button>
+            </div>
+            <div id="messages"></div>
+        </div>
         <div id="cabots"></div>
-        <div id="connection-status">接続状態: 接続中</div>
     </div>
 
     <script>
-        const messagesDiv = document.getElementById('messages');
-        const cabotsDiv = document.getElementById('cabots');
-        const connectionStatus = document.getElementById('connection-status');
-
         const baseUrl = '{{ base_url }}';
         const apiKey = '{{ api_key }}';
-
-        async function fetchWithAuth(url, options = {}) {
-            const defaultOptions = {
-                headers: {
-                    'X-API-Key': apiKey,
-                    'Content-Type': 'application/json'
-                }
-            };
-            
-            const mergedOptions = { 
-                ...defaultOptions, 
-                ...options,
-                headers: {
-                    ...defaultOptions.headers,
-                    ...(options.headers || {})
-                }
-            };
-
-            try {
-                const response = await fetch(url, mergedOptions);
-                if (!response.ok) {
-                    throw new Error(`HTTPエラー! ステータス: ${response.status}`);
-                }
-                return await response.json();
-            } catch (error) {
-                console.error('フェッチエラー:', error);
-                addMessage(`フェッチエラー: ${error.message}`, "error");
-                throw error;
-            }
-        }
-
-        async function fetchUpdates() {
-            try {
-                const data = await fetchWithAuth('/receive');
-                updateDashboard(data);
-            } catch (error) {
-                console.error('更新の取得中にエラーが発生しました:', error);
-            }
-        }
-
-        function updateDashboard(data) {
-            updateRobotList(data.robots);
-            updateMessages(data.messages);
-            // updateEvents(data.events);  // イベントの更新処理があれば実装
-        }
-
-        function updateRobotList(robots) {
-            // 既存のupdateCabotList関数を使用または修正
-        }
-
-        function updateMessages(messages) {
-            if (!messages || messages.length === 0) return;
-
-            // メッセージリストがない場合は新規作成
-            let messageList = messagesDiv.querySelector('ul');
-            if (!messageList) {
-                messagesDiv.innerHTML = '<h2>メッセージ</h2>';
-                messageList = document.createElement('ul');
-                messagesDiv.appendChild(messageList);
-            }
-
-            // 新しいメッセージのみを追加
-            messages.forEach(message => {
-                // メッセージのユニークなIDを作成
-                const messageId = `${message.timestamp}-${message.client_id}`;
-                
-                // 既存のメッセージをチェック
-                if (!messageList.querySelector(`[data-message-id="${messageId}"]`)) {
-                    const messageText = typeof message.message === 'object' ? 
-                        JSON.stringify(message.message) : message.message;
-
-                    const li = document.createElement('li');
-                    li.setAttribute('data-message-id', messageId);
-                    li.textContent = `${new Date(message.timestamp).toLocaleString()} - ${message.client_id}: ${messageText}`;
-                    messageList.appendChild(li);
-                }
-            });
-
-            // スクロールを最下部に移動
-            messagesDiv.scrollTop = messagesDiv.scrollHeight;
-        }
-
-        function updateEvents(events) {
-            // イベント表示を更新
-        }
-
-        // async function fetchMessages() {
-        //     try {
-        //         const url = new URL('/receive', baseUrl);
-        //         const data = await fetchWithAuth(url);
-        //         if (data.messages && data.messages.length > 0) {
-        //             data.messages.forEach(message => addMessage(message, "status"));
-        //         }
-        //     } catch (error) {
-        //         console.error('メッセージの取得中にエラーが発生しました:', error);
-        //     }
-        // }
-
-        function addMessage(message, type) {
-            const messageList = messagesDiv.querySelector('ul') || (() => {
-                messagesDiv.innerHTML = '<h2>メッセージ</h2>';
-                const ul = document.createElement('ul');
-                messagesDiv.appendChild(ul);
-                return ul;
-            })();
-
-            const messageText = typeof message === 'object' ? 
-                JSON.stringify(message) : message;
-
-            const li = document.createElement('li');
-            li.className = type;
-            li.textContent = `${new Date().toLocaleString()} - ${messageText}`;
-            messageList.appendChild(li);
-            messagesDiv.scrollTop = messagesDiv.scrollHeight;
-        }
- 
-        async function fetchConnectedCabots() {
-            try {
-                const data = await fetchWithAuth('/connected_cabots');
-                if (data && data.cabots) {
-                    updateCabotList(data.cabots);
-                }
-            } catch (error) {
-                console.error('Cabotリストの取得中にエラーが発生しました:', error);
-            }
-        }
-
-        function updateCabotList(cabots) {
-            cabotsDiv.innerHTML = '<h2>CaBot一覧</h2>';
-            const table = document.createElement('table');
-            table.innerHTML = `
-                <tr>
-                    <th>Cabot ID</th>
-                    <th>状態</th>
-                    <th>アクション</th>
-                    <th>最終ポーリング時間</th>
-                    <th>メッセージ</th>
-                </tr>
-            `;
-            
-            cabots.forEach(cabot => {
-                const row = table.insertRow();
-                row.className = cabot.connected ? 'connected' : 'disconnected';
-                
-                // Cabot ID
-                row.insertCell().textContent = cabot.id || '不明';
-                
-                // 状態
-                const statusCell = row.insertCell();
-                statusCell.textContent = cabot.connected ? '接続中' : '切断';
-                statusCell.className = cabot.connected ? 'status-connected' : 'status-disconnected';
-                
-                // アクション
-                const actionCell = row.insertCell();
-                if (cabot.connected) {
-                    actionCell.innerHTML = `
-                        <button onclick="sendCommand('${cabot.id}', 'start')">開始</button>
-                        <button onclick="sendCommand('${cabot.id}', 'stop')">停止</button>
-                    `;
-                } else {
-                    actionCell.innerHTML = '<span class="disabled">操作不可</span>';
-                }
-                
-                // 最終ポーリング時間
-                const lastPollCell = row.insertCell();
-                if (cabot.last_poll) {
-                    const lastPollTime = new Date(cabot.last_poll);
-                    const timeLeft = cabot.polling_timeout - cabot.time_since_last_poll;
-                    const timeStatus = timeLeft > 0 ? 
-                        `(タイムアウトまで残り${timeLeft}秒)` : 
-                        `(タイムアウト: ${-timeLeft}秒経過)`;
-                    
-                    lastPollCell.textContent = `${lastPollTime.toLocaleString()} ${timeStatus}`;
-                    
-                    // タイムアウトが近い場合は警告表示
-                    if (timeLeft < 10 && timeLeft > 0) {
-                        lastPollCell.className = 'warning';
-                    } else if (timeLeft <= 0) {
-                        lastPollCell.className = 'timeout';
-                    }
-                } else {
-                    lastPollCell.textContent = '不明';
-                }
-                
-                // メッセージ
-                row.insertCell().textContent = cabot.message || '';
-            });
-            
-            cabotsDiv.appendChild(table);
-        }
-
-        function formatDateTime(dateTimeString) {
-            if (!dateTimeString) return '不明';
-            const date = new Date(dateTimeString);
-            return date.toLocaleString();
-        }
-
-        async function sendCommand(cabotId, command) {
-            try {
-                const commandData = {
-                    command: command,
-                    commandOption: {"ProcessName": "ROS"}
-                };
-                
-                const options = {
-                    method: 'POST',
-                    body: JSON.stringify(commandData)
-                };
-                
-                const data = await fetchWithAuth(`/send_command/${cabotId}`, options);
-                console.log('コマンド送信:', data);
-                addMessage(`コマンド送信: ${cabotId} - ${command}`, "status");
-                
-                // コマンド送信後にCaBotリストを更新
-                await fetchConnectedCabots();
-            } catch (error) {
-                console.error('コマンド送信中にエラーが発生しました:', error);
-                addMessage(`コマンド送信エラー: ${error.message}`, "error");
-            }
-        }
-
-        // setInterval(fetchMessages, 1000);
-        setInterval(fetchConnectedCabots, 3000);  // 3秒ごとに更新
-        setInterval(fetchUpdates, 5000);
     </script>
+    <script src="{{ url_for('static', path='/js/dashboard.js') | replace('http://', '//') }}"></script>
 </body>
 </html>

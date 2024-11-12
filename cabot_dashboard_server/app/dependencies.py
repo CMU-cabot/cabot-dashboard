@@ -9,16 +9,16 @@ from app.config import settings
 from app.utils.logger import logger
 from app.services.robot_manager import RobotManager
 
-# シングルトンインスタンスの作成
+# Create singleton instances
 auth_service = AuthService()
 robot_state_manager = RobotStateManager()
 command_queue_manager = CommandQueueManager()
 
-# APIキー認証のヘッダー設定
+# API key authentication header settings
 api_key_header = APIKeyHeader(name="X-API-Key", auto_error=False)
 
 async def get_api_key(api_key: str = Depends(api_key_header)) -> str:
-    """APIキーの検証"""
+    """Verify API key"""
     if api_key == settings.api_key:
         return api_key
     logger.warning(f"Invalid API key attempt: {api_key}")
@@ -30,7 +30,7 @@ async def get_api_key(api_key: str = Depends(api_key_header)) -> str:
 async def get_current_user(
     session_token: Optional[str] = Cookie(None)
 ) -> str:
-    """現在のユーザーを取得"""
+    """Get current user"""
     user_id = auth_service.validate_session(session_token)
     if not user_id:
         raise HTTPException(
@@ -40,23 +40,23 @@ async def get_current_user(
     return user_id
 
 def get_auth_service() -> AuthService:
-    """認証サービスのインスタンスを取得"""
+    """Get authentication service instance"""
     return auth_service
 
 def get_robot_state_manager():
-    """RobotStateManagerのインスタンスを取得"""
+    """Get RobotStateManager instance"""
     return robot_state_manager
 
 def get_robot_manager():
-    """後方互換性のために残す（非推奨）"""
+    """Keep for backwards compatibility (deprecated)"""
     return robot_state_manager
 
 def get_command_queue_manager():
-    """CommandQueueManagerのインスタンスを取得"""
+    """Get CommandQueueManager instance"""
     return command_queue_manager    
 
 async def verify_api_key(x_api_key: str = Header(..., alias="X-API-Key")):
-    # デバッグログを追加
+    # Add debug logs
     logger.debug(f"Verifying API key: {x_api_key}")
     logger.debug(f"Expected API key: {settings.api_key}")
     

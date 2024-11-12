@@ -12,20 +12,20 @@ class RobotStateManager:
             cls._instance.connected_cabots = {}
             cls._instance.messages = []
             cls._instance.POLLING_TIMEOUT = settings.polling_timeout
-            cls._instance.MAX_MESSAGES = 1000  # メッセージの最大保持数
+            cls._instance.MAX_MESSAGES = 1000  # Maximum number of messages to retain
         return cls._instance
 
     def __init__(self):
-        # __new__で初期化するため、ここは空でOK
+        # Empty since initialization is done in __new__
         pass
 
     def get_robot_info(self) -> Dict:
-        """全てのロボットの情報を取得"""
+        """Get information for all robots"""
         current_time = datetime.now()
         robot_info = {}
         
         for robot_id, state in self.connected_cabots.items():
-            # 最後のポーリングから一定時間（POLLING_TIMEOUT）以内のものを接続中とみなす
+            # Consider robots connected if last poll was within POLLING_TIMEOUT
             last_poll = datetime.fromisoformat(state.get('last_poll', current_time.isoformat()))
             is_connected = (current_time - last_poll).seconds < self.POLLING_TIMEOUT
             
@@ -38,12 +38,12 @@ class RobotStateManager:
         
         return {
             'robots': robot_info,
-            'messages': self.messages[-10:]  # 最新10件のメッセージを返す
+            'messages': self.messages[-10:]  # Return latest 10 messages
         }
 
     def update_robot_state(self, client_id: str, state: dict):
         logger.debug(f"Updating state for {client_id}: {state}")
-        # 接続状態の更新時にconnected_cabotsに追加されているか確認
+        # Check if robot exists in connected_cabots when updating connection state
         self.connected_cabots[client_id] = {
             "id": client_id,
             "status": state.get("status", "unknown"),
@@ -54,7 +54,7 @@ class RobotStateManager:
         logger.debug(f"Updated connected_cabots: {self.connected_cabots}")
 
     def get_connected_cabots_list(self) -> list:
-        """全てのCaBotのリストを取得（接続状態に関わらず）"""
+        """Get list of all CaBots (regardless of connection status)"""
         current_time = datetime.now()
         cabot_list = []
         
@@ -62,10 +62,10 @@ class RobotStateManager:
         
         for robot_id, robot_info in self.connected_cabots.items():
             try:
-                # 最後のポーリングから経過時間を計算
+                # Calculate time since last poll
                 last_poll = datetime.fromisoformat(robot_info.get('last_poll', ''))
                 time_since_last_poll = (current_time - last_poll).seconds
-                is_connected = time_since_last_poll < self.POLLING_TIMEOUT  # タイムアウト時間を使用
+                is_connected = time_since_last_poll < self.POLLING_TIMEOUT  # Use timeout value
                 
                 cabot_list.append({
                     'id': robot_id,
@@ -74,7 +74,7 @@ class RobotStateManager:
                     'message': robot_info.get('message', ''),
                     'connected': is_connected,
                     'time_since_last_poll': time_since_last_poll,
-                    'polling_timeout': self.POLLING_TIMEOUT  # タイムアウト時間も含める
+                    'polling_timeout': self.POLLING_TIMEOUT  # Include timeout value
                 })
                 
                 logger.debug(f"Added robot {robot_id} to list. Connected: {is_connected}, "
@@ -82,7 +82,7 @@ class RobotStateManager:
                 
             except Exception as e:
                 logger.error(f"Error processing robot {robot_id}: {e}")
-                # エラーの場合でもリストに追加（切断状態として）
+                # Add to list even on error (as disconnected)
                 cabot_list.append({
                     'id': robot_id,
                     'status': 'error',
@@ -95,18 +95,18 @@ class RobotStateManager:
         return cabot_list
 
     async def send_command(self, robot_id: str, command: Dict) -> None:
-        """ロボットにコマンドを送信"""
+        """Send command to robot"""
         if robot_id not in self.connected_cabots:
             raise ValueError(f"Robot {robot_id} not connected")
         
-        # コマンド送信後も接続状態を維持
+        # Maintain connection state after sending command
         self.connected_cabots[robot_id].update({
             'last_command': datetime.now().isoformat(),
             'last_command_type': command.get('type')
         })
 
     def add_message(self, client_id: str, message: str):
-        """新しいメッセージを追加"""
+        """Add new message"""
         timestamp = datetime.now().isoformat()
         new_message = {
             "timestamp": timestamp,
@@ -115,19 +115,19 @@ class RobotStateManager:
         }
         self.messages.append(new_message)
         
-        # 最大数を超えた場合、古いメッセージを削除
+        # Remove old messages if exceeding maximum
         if len(self.messages) > self.MAX_MESSAGES:
             self.messages = self.messages[-self.MAX_MESSAGES:]
 
     def update_client_status(self, client_id: str, message: str):
-        """クライアントのステータスを更新し、メッセージを記録"""
+        """Update client status and record message"""
         if client_id in self.connected_cabots:
             self.connected_cabots[client_id].update({
                 'message': message,
                 'last_poll': datetime.now().isoformat(),
                 'status': 'connected'
             })
-            # メッセージを履歴に追加
+            # Add message to history
             self.add_message(client_id, message)
             logger.debug(f"Updated status for {client_id}: {message}")
         else:
@@ -135,5 +135,5 @@ class RobotStateManager:
             raise ValueError(f"Client {client_id} not found")
 
     def get_messages(self, limit: int = 100) -> list:
-        """最新のメッセージを取得"""
+        """Get latest messages"""
         return self.messages[-limit:]

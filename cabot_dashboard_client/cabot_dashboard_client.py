@@ -1,188 +1,158 @@
+from enum import Enum
 import aiohttp
 import asyncio
 import argparse
 import logging
 import os
-from aiohttp import ClientError, ClientConnectorError, ServerDisconnectedError
+from aiohttp import ClientError
+from dataclasses import dataclass
+from typing import Optional, Tuple, Dict, Any
 
-def setup_logger():
-    log_level = os.environ.get('CABOT_DASHBOARD_LOG_LEVEL', 'INFO')
-    log_format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-    date_format = '%Y-%m-%d %H:%M:%S'
+@dataclass
+class Config:
+    """Configuration data class"""
+    log_level: str
+    log_to_file: bool
+    log_file: str
+    server_url: str
+    api_key: str
+    max_retries: int
+    retry_delay: int
+    polling_interval: int
 
+    @classmethod
+    def from_env(cls) -> 'Config':
+        """Load configuration from environment variables"""
+        return cls(
+            log_level=os.environ.get('CABOT_DASHBOARD_LOG_LEVEL', 'INFO'),
+            log_to_file=os.environ.get('CABOT_DASHBOARD_LOG_TO_FILE', 'false').lower() == 'true',
+            log_file=os.environ.get('CABOT_DASHBOARD_LOG_FILE', 'cabot.log'),
+            server_url=os.environ.get("CABOT_DASHBOARD_SERVER_URL", "http://server:8000"),
+            api_key=os.environ.get("CABOT_DASHBOARD_API_KEY", "your_secret_api_key_here"),
+            max_retries=int(os.environ.get("CABOT_DASHBOARD_MAX_RETRIES", "5")),
+            retry_delay=int(os.environ.get("CABOT_DASHBOARD_RETRY_DELAY", "5")),
+            polling_interval=int(os.environ.get("CABOT_DASHBOARD_POLLING_INTERVAL", "1"))
+        )
+
+class CommandType(Enum):
+    """Supported command types"""
+    ROS_START = "ros-start"
+    ROS_STOP = "ros-stop"
+    SYSTEM_REBOOT = "system-reboot"
+    SYSTEM_POWEROFF = "system-poweroff"
+    DEBUG1 = "debug1"
+    DEBUG2 = "debug2"
+
+class SystemCommand:
+    """System command execution handler"""
+    def __init__(self, cabot_id: str):
+        self.cabot_id = cabot_id
+        
+    async def execute(self, command: list[str]) -> Tuple[bool, Optional[str]]:
+        try:
+            process = await asyncio.create_subprocess_exec(
+                *command,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            stdout, stderr = await process.communicate()
+            return (True, None) if process.returncode == 0 else (False, stderr.decode() if stderr else "Unknown error")
+        except Exception as e:
+            return False, str(e)
+
+def setup_logger(config: Config) -> logging.Logger:
     logger = logging.getLogger(__name__)
-    logger.setLevel(log_level)
+    logger.setLevel(config.log_level)
     logger.handlers.clear()
 
-    log_to_file = os.environ.get('CABOT_DASHBOARD_LOG_TO_FILE', 'false').lower() == 'true'
-    log_file = os.environ.get('CABOT_DASHBOARD_LOG_FILE', 'cabot.log')
-    handler = logging.FileHandler(log_file) if log_to_file else logging.StreamHandler()
-
-    handler.setFormatter(logging.Formatter(log_format, date_format))
+    handler = logging.FileHandler(config.log_file) if config.log_to_file else logging.StreamHandler()
+    handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s', '%Y-%m-%d %H:%M:%S'))
     logger.addHandler(handler)
-
     return logger
 
-logger = setup_logger()
-
 class CabotDashboardClient:
-    def __init__(self, cabot_id):
+    def __init__(self, cabot_id: str):
         self.cabot_id = cabot_id
-        self.base_url = os.environ.get("CABOT_DASHBOARD_SERVER_URL", "http://server:8000")
-        self.api_key = os.environ.get("CABOT_DASHBOARD_API_KEY", "your_secret_api_key_here")
-        self.max_retries = 5
-        self.retry_delay = 5  # seconds
-        self.polling_interval = int(os.environ.get("CABOT_DASHBOARD_POLLING_INTERVAL", "1"))
+        self.config = Config.from_env()
+        self.logger = setup_logger(self.config)
+        self.system_command = SystemCommand(cabot_id)
+        self._command_handlers = {
+            CommandType.ROS_START: ['systemctl', '--user', 'start', 'cabot'],
+            CommandType.ROS_STOP: ['systemctl', '--user', 'stop', 'cabot'],
+            CommandType.SYSTEM_REBOOT: ['sudo', 'systemctl', 'reboot'],
+            CommandType.SYSTEM_POWEROFF: ['sudo', 'systemctl', 'poweroff'],
+            CommandType.DEBUG1: ['systemctl', '--user', 'restart', 'myapp'],
+            CommandType.DEBUG2: ['sudo', 'systemctl', 'restart', 'cron']
+        }
 
-    async def _make_request(self, session, method, endpoint, data=None):
-        headers = {"X-API-Key": self.api_key}
-        url = f"{self.base_url}/api/client/{endpoint}"
+    async def _make_request(self, session: aiohttp.ClientSession, method: str, endpoint: str, data: Optional[Dict] = None) -> Tuple[Optional[int], Optional[Dict]]:
+        headers = {"X-API-Key": self.config.api_key}
+        url = f"{self.config.server_url}/api/client/{endpoint}"
         try:
             async with getattr(session, method)(url, headers=headers, json=data) as response:
                 return response.status, await response.json() if response.status == 200 else None
         except ClientError as e:
-            logger.error(f"CabotDashboardClient {self.cabot_id}: Request error: {e}")
+            self.logger.error(f"Request error: {e}")
             return None, None
 
-    async def send_status(self, session, status):
-        status_code, response = await self._make_request(session, 'post', f"send/{self.cabot_id}", {"message": status})
-        if status_code == 200:
-            logger.info(f"CabotDashboardClient {self.cabot_id}: Status sent successfully: {status}")
-        elif status_code == 404:
-            logger.error(f"CabotDashboardClient {self.cabot_id}: Endpoint not found. URL: {self.base_url}/api/client/send/{self.cabot_id}")
-            # Connection may be lost, trigger reconnection
+    async def send_status(self, session: aiohttp.ClientSession, status: str) -> bool:
+        status_code, _ = await self._make_request(session, 'post', f"send/{self.cabot_id}", {"message": status})
+        if status_code == 404:
             return False
-        else:
-            logger.warning(f"CabotDashboardClient {self.cabot_id}: Failed to send status. Status code: {status_code}")
         return True
 
-    async def connect(self, session):
-        for attempt in range(self.max_retries):
+    async def connect(self, session: aiohttp.ClientSession) -> bool:
+        for attempt in range(self.config.max_retries):
             status_code, _ = await self._make_request(session, 'post', f"connect/{self.cabot_id}")
             if status_code == 200:
-                logger.info(f"CabotDashboardClient {self.cabot_id}: Connected to server")
                 return True
             elif status_code == 403:
-                logger.error(f"CabotDashboardClient {self.cabot_id}: Authentication failed. Please check your API key.")
                 return False
-            else:
-                logger.error(f"CabotDashboardClient {self.cabot_id}: Connection failed. Status: {status_code}")
-            
-            await asyncio.sleep(self.retry_delay)
-        
-        logger.error(f"CabotDashboardClient {self.cabot_id}: Failed to connect after {self.max_retries} attempts")
+            await asyncio.sleep(self.config.retry_delay)
         return False
 
-    async def handle_command(self, session, command):
-        logger.info(f"CabotDashboardClient {self.cabot_id}: Processing command: {command}")
-        
-        if not isinstance(command, dict):
-            logger.error(f"CabotDashboardClient {self.cabot_id}: Invalid command format: {command}")
-            await self.send_status(session, "Error: Invalid command format")
-            return
-
+    async def handle_command(self, session: aiohttp.ClientSession, command: Dict[str, Any]) -> None:
         command_type = command.get('command')
-        command_option = command.get('commandOption', {})
-
-        if command_type == "start":
-            process_name = command_option.get('ProcessName')
-            if not process_name:
-                logger.error(f"CabotDashboardClient {self.cabot_id}: ProcessName not specified in command")
-                await self.send_status(session, "Error: ProcessName not specified")
-                return
-
-            await self.send_status(session, f"Restarting {process_name}...")
-            try:
-                process = await asyncio.create_subprocess_exec(
-                    # 'sudo', 'systemctl', 'restart', "cron",
-                    # 'sudo', 'systemctl', 'reboot',
-                    # 'sudo', 'systemctl', 'poweroff',
-                    #'systemctl', '--user', 'restart', process_name,
-                    'systemctl', '--user', 'restart', 'myapp',
-                    # 'systemctl', '--user', 'start', 'cabot',
-                    # 'systemctl', '--user', 'stop', 'cabot',
-                    # 'systemctl', '--user', 'is-active', 'cabot',
-                    stdout=asyncio.subprocess.PIPE,
-                    stderr=asyncio.subprocess.PIPE
-                )
-                stdout, stderr = await process.communicate()
-                
-                if process.returncode == 0:
-                    logger.info(f"CabotDashboardClient {self.cabot_id}: Successfully restarted {process_name}")
-                    await self.send_status(session, f"{process_name} restart completed successfully")
-                else:
-                    error_msg = stderr.decode() if stderr else "Unknown error"
-                    logger.error(f"CabotDashboardClient {self.cabot_id}: Failed to restart {process_name}: {error_msg}")
-                    await self.send_status(session, f"Error restarting {process_name}: {error_msg}")
+        try:
+            cmd_type = CommandType(command_type)
+            command_args = self._command_handlers.get(cmd_type)
             
-            except Exception as e:
-                logger.error(f"CabotDashboardClient {self.cabot_id}: Error executing systemctl: {str(e)}")
-                await self.send_status(session, f"Error executing restart command: {str(e)}")
-        
-        elif command_type == "stop":
-            process_name = command_option.get('ProcessName')
-            if not process_name:
-                logger.error(f"CabotDashboardClient {self.cabot_id}: ProcessName not specified in command")
-                await self.send_status(session, "Error: ProcessName not specified")
+            if not command_args:
+                await self.send_status(session, f"Unknown command type: {command_type}")
                 return
 
-            await self.send_status(session, f"Stopping {process_name}...")
-            # Add process stop logic here
+            await self.send_status(session, f"Executing {command_type}...")
+            success, error = await self.system_command.execute(command_args)
 
-        elif command_type == "debug":
-            message = command_option.get('message', 'No message provided')
-            logger.debug(f"CabotDashboardClient {self.cabot_id}: Debug message received: {message}")
-            await self.send_status(session, f"Debug message processed: {message}")
+            if success:
+                await self.send_status(session, f"{command_type} completed successfully")
+            else:
+                await self.send_status(session, f"Error {command_type}: {error}")
 
-        else:
-            logger.warning(f"CabotDashboardClient {self.cabot_id}: Unknown command type: {command_type}")
-            await self.send_status(session, f"Unknown command type: {command_type}")
+        except ValueError:
+            await self.send_status(session, f"Invalid command type: {command_type}")
+        except Exception as e:
+            await self.send_status(session, f"Error executing command {command_type}: {str(e)}")
 
-    async def run(self):
-        """Main loop"""
+    async def run(self) -> None:
         async with aiohttp.ClientSession() as session:
             while True:
                 try:
                     if await self.connect(session):
-                        logger.info(f"CabotDashboardClient {self.cabot_id}: Connected to server")
-                        
-                        # Polling loop
-                        polling_count = 0
                         while True:
-                            try:
-                                polling_count += 1
-                                logger.info(f"CabotDashboardClient {self.cabot_id}: Polling attempt {polling_count}")
-                                
-                                status_code, data = await self._make_request(session, 'get', f"poll/{self.cabot_id}")
-                                logger.debug(f"CabotDashboardClient {self.cabot_id}: Poll response - Status: {status_code}, Data: {data}")
-                                
-                                if status_code == 200:
-                                    logger.info(f"CabotDashboardClient {self.cabot_id}: Received command - {data}")
-                                    await self.handle_command(session, data)
-                                elif status_code == 404:
-                                    logger.warning(f"CabotDashboardClient {self.cabot_id}: Connection lost, attempting to reconnect...")
-                                    break
-                                else:
-                                    logger.warning(f"CabotDashboardClient {self.cabot_id}: Unexpected response status: {status_code}")
-                                
-                                # Send status update
-                                await self.send_status(session, f"Status update {polling_count} from {self.cabot_id}")
-                                
-                                # Wait for polling interval
-                                logger.debug(f"CabotDashboardClient {self.cabot_id}: Waiting {self.polling_interval} seconds before next poll")
-                                await asyncio.sleep(self.polling_interval)
-                                
-                            except Exception as e:
-                                logger.error(f"CabotDashboardClient {self.cabot_id}: Error during polling: {e}")
+                            status_code, data = await self._make_request(session, 'get', f"poll/{self.cabot_id}")
+                            
+                            if status_code == 200:
+                                await self.handle_command(session, data)
+                            elif status_code == 404:
                                 break
+                                
+                            await asyncio.sleep(self.config.polling_interval)
+                            
+                    await asyncio.sleep(self.config.retry_delay)
                     
-                    # Retry if connection failed
-                    logger.info(f"CabotDashboardClient {self.cabot_id}: Waiting {self.retry_delay} seconds before reconnection attempt")
-                    await asyncio.sleep(self.retry_delay)
-                    
-                except Exception as e:
-                    logger.error(f"CabotDashboardClient {self.cabot_id}: Unexpected error: {e}")
-                    await asyncio.sleep(self.retry_delay)
+                except Exception:
+                    await asyncio.sleep(self.config.retry_delay)
 
 async def main():
     parser = argparse.ArgumentParser(description='CaBot Dashboard Client')
@@ -190,18 +160,12 @@ async def main():
     args = parser.parse_args()
 
     if args.simulate:
-        # Simulation mode: generate multiple clients
-        clients = []
-        for i in range(args.simulate):
-            cabot_id = f"cabot_{i+1}"
-            client = CabotDashboardClient(cabot_id)
-            clients.append(client.run())
+        clients = [CabotDashboardClient(f"cabot_{i+1}").run() for i in range(args.simulate)]
         await asyncio.gather(*clients)
     else:
-        # Normal mode: get CABOT_ID from environment variable
         cabot_id = os.environ.get("CABOT_DASHBOARD_CABOT_ID")
         if not cabot_id:
-            logger.error("Environment variable CABOT_ID is not set")
+            logging.error("Environment variable CABOT_ID is not set")
             return
         
         client = CabotDashboardClient(cabot_id)
@@ -211,6 +175,6 @@ if __name__ == "__main__":
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
-        logger.info("Shutting down gracefully...")
+        pass
     except Exception as e:
-        logger.critical(f"Unexpected error in main process: {e}")
+        logging.critical(f"Unexpected error in main process: {e}")
