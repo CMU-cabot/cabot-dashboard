@@ -1,0 +1,12 @@
+{
+    "users": [
+        {
+            "id": "user1",
+            "password_hash": "$2b$12$MjwJjgdlk3PME9I.TRrvm.aYBSXnksdWMAUcVOabk8JyVCBdhQR/i"
+        },
+        {
+            "id": "user2",
+            "password_hash": "$2b$12$atKHM/4mHPkwXomF9h5Mlu79Yg3DHffXTZQ398YZRWe4ncinahzaG"
+        }
+    ]
+}

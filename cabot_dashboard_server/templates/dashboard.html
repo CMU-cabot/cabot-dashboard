@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='/css/dashboard.css') | replace('http://', '//') }}">
+</head>
+<body>
+    <div id="dashboard">
+        <h1>Cabot Dashboard</h1>
+        <p>Welcome, {{ user }}</p>
+        <form action="/logout" method="post">
+            <input type="submit" value="Logout">
+        </form>
+
+        <div id="cabots"></div>
+        <div id="messages" style="display: none;" class="messages-container">
+            <h2>Messages</h2>
+            <div class="message-controls">
+                <button onclick="clearMessages()">Clear Messages</button>
+                <button id="toggleMessagesBtn" onclick="toggleMessages()">Stop Messages</button>
+            </div>
+            <div id="messages"></div>
+        </div>
+    </div>
+
+    <script>
+        const baseUrl = '{{ base_url }}';
+        const apiKey = '{{ api_key }}';
+        const debugMode = '{{ debug_mode }}' === 'True';
+    </script>
+    <script src="{{ url_for('static', path='/js/dashboard.js') | replace('http://', '//') }}"></script>
+</body>
+</html>

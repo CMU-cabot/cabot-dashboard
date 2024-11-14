@@ -1,0 +1,81 @@
+body {
+    font-family: Arial, sans-serif;
+    margin: 0;
+    padding: 20px;
+    background-color: #f0f0f0;
+}
+
+#dashboard {
+    background-color: white;
+    border-radius: 5px;
+    padding: 20px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    position: relative;
+}
+
+#logout-form {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+}
+
+#messages {
+    height: 200px;
+    overflow-y: auto;
+    border: 1px solid #ddd;
+    padding: 10px;
+    margin-bottom: 20px;
+}
+
+.messages-container {
+    margin-bottom: 20px;
+}
+
+.messages-container h2 {
+    margin-bottom: 10px;
+}
+
+.message-controls {
+    margin-bottom: 10px;
+}
+
+.message-controls button {
+    padding: 5px 10px;
+    margin-right: 10px;
+}
+
+.button-disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+#cabots {
+    border: 1px solid #ddd;
+    padding: 10px;
+    margin-bottom: 20px;
+}
+
+.status { margin-bottom: 5px; }
+.error { color: red; }
+.warning { color: orange; }
+.timeout { color: red; }
+
+button { margin-right: 10px; }
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+th, td {
+    border: 1px solid #ddd;
+    padding: 8px;
+    text-align: left;
+}
+
+th { background-color: #f2f2f2; }
+
+button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
