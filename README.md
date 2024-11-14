@@ -6,7 +6,7 @@
 - [ ] 管理画面認証（EntraID）
 - [ ] 管理画面UI設計
 - [ ] 管理項目の確定
-- [ ] クライアント側アクション実行
+- [x] クライアント側アクション実行
 - [ ] サーバ側のデータ管理
 - [ ] 性能測定
 
@@ -101,10 +101,12 @@ graph TB
 
 | 項番 | 操作 | Command | CommandOption |
 |------|------|---------|-----------|
-| 1 | ロボット停止 | stop | ROS |
-| 2 | ロボット再起動 | restart | ROS |
-| 3 | プロセスA再起動 | restart | ProcessA |
-| 4 | debug | debug | "test message" |
+| 1 | ROS起動 | ros-start |  |
+| 2 | ROS停止 | ros-stop |  |
+| 3 | システム再起動 | system-reboot |  |
+| 4 | システム電源OFF | system-poweroff |  |
+| 5 | Debug1 | debug1 |  |
+| 6 | Debug2 | debug2 |  |
 
 ### メッセージサンプル
 
@@ -132,9 +134,6 @@ sequenceDiagram
     participant Dashboard
     participant Server
     participant Robot
-
-    Dashboard->>Server: GET /connected_cabots
-    Server-->>Dashboard: List of connected robots
 
     loop Polling
         Robot->>Server: GET /poll/{client_id}
@@ -207,6 +206,8 @@ docker-compose down
   - CABOT_DASHBOARD_SESSION_TIMEOUT=1800
   - CABOT_DASHBOARD_MAX_ROBOTS=20 # Maximum number of connected robots
   - CABOT_DASHBOARD_POLL_TIMEOUT=30 # Timeout period (seconds)
+  - CABOT_DASHBOARD_DEBUG_MODE=false
+  - CABOT_DASHBOARD_ALLOWED_CABOT_IDS
 
   - ~~ WEBSITES_WEBSOCKETS_ENABLED = 1 ~~
   - https://learn.microsoft.com/ja-jp/azure/app-service/reference-app-settings?source=recommendations&tabs=kudu%2Cdotnet

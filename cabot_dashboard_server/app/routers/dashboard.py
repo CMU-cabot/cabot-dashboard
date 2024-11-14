@@ -20,7 +20,6 @@ async def dashboard_page(
     session_token: str = Cookie(None),
     auth_service: AuthService = Depends(get_auth_service)
 ):
-    """Display dashboard page"""
     try:
         if not session_token or not auth_service.validate_session(session_token, timeout=3600):
             return RedirectResponse(url="/login")
@@ -32,7 +31,7 @@ async def dashboard_page(
                 "base_url": request.base_url,
                 "api_key": settings.api_key,
                 "debug_mode": settings.debug_mode,
-                "user": "user1"  # 一時的な対処
+                "user": "user1"  # TODO 一時的な対処
             }
         )
     except ValueError:
@@ -43,12 +42,9 @@ async def receive_updates(
     api_key: str = Depends(get_api_key),
     robot_manager = Depends(get_robot_state_manager)
 ):
-    """Get robot information and message updates"""
     try:
-        # robot_info = robot_manager.get_robot_info()
         connected_cabot_list = robot_manager.get_connected_cabots_list()
         return {
-            # "robots": robot_info,
             "messages": robot_manager.messages,
             "events": [],
             "cabots": connected_cabot_list
@@ -88,5 +84,4 @@ async def get_messages(
     limit: int = 100,
     robot_state_manager: RobotStateManager = Depends(get_robot_state_manager)
 ):
-    """Get message history"""
     return robot_state_manager.get_messages(limit)

@@ -11,6 +11,7 @@ services:
       - CABOT_DASHBOARD_MAX_ROBOTS
       - CABOT_DASHBOARD_POLL_TIMEOUT
       - CABOT_DASHBOARD_DEBUG_MODE
+      - CABOT_DASHBOARD_ALLOWED_CABOT_IDS
     logging:
       driver: "json-file"
       options:
