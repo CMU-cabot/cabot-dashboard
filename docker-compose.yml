@@ -4,13 +4,13 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - CABOT_DASHBOARD_LOG_LEVEL=INFO
-      - CABOT_DASHBOARD_LOG_TO_FILE=false
-      # - CABOT_DASHBOARD_API_KEY=[API KEY]
-      - CABOT_DASHBOARD_SESSION_TIMEOUT=1800
-      - CABOT_DASHBOARD_MAX_ROBOTS=20 # Maximum number of connected robots
-      - CABOT_DASHBOARD_POLL_TIMEOUT=240 # Timeout period (seconds)
-      - CABOT_DASHBOARD_DEBUG_MODE=false
+      - CABOT_DASHBOARD_LOG_LEVEL
+      - CABOT_DASHBOARD_LOG_TO_FILE
+      - CABOT_DASHBOARD_API_KEY
+      - CABOT_DASHBOARD_SESSION_TIMEOUT
+      - CABOT_DASHBOARD_MAX_ROBOTS
+      - CABOT_DASHBOARD_POLL_TIMEOUT
+      - CABOT_DASHBOARD_DEBUG_MODE
     logging:
       driver: "json-file"
       options:
@@ -32,13 +32,13 @@ services:
     #required fo systemctl
     privileged: true
     environment:
-      - DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/1000/bus
-      # - CABOT_DASHBOARD_SERVER_URL=http://localhost:8000
-      # - CABOT_DASHBOARD_API_KEY=[API KEY]
-      - CABOT_DASHBOARD_LOG_LEVEL=INFO
-      - CABOT_DASHBOARD_LOG_TO_FILE=false
-      - CABOT_DASHBOARD_POLLING_INTERVAL=1
-      # - CABOT_DASHBOARD_CABOT_ID=[cabot-id]
+      - DBUS_SESSION_BUS_ADDRESS=unix:path
+      - CABOT_DASHBOARD_SERVER_URL
+      - CABOT_DASHBOARD_API_KEY
+      - CABOT_DASHBOARD_LOG_LEVEL
+      - CABOT_DASHBOARD_LOG_TO_FILE
+      - CABOT_DASHBOARD_POLLING_INTERVAL
+      - CABOT_DASHBOARD_CABOT_ID
     network_mode: host
     logging:
       driver: "json-file"

@@ -58,18 +58,6 @@ class RobotStateManager:
             logger.warning(f"Attempted to update message for unknown client: {client_id}")
             raise ValueError(f"Client {client_id} not found")
 
-    def get_connected_cabots_list(self) -> List[str]:
-        cabot_list = []
-        for robot_id, info in self.robots.items():
-            cabot_list.append({
-                'id': robot_id,
-                'status': info.get('status', 'unknown'),
-                'last_poll': info.get('last_poll'),
-                'message': info.get('message', ''),
-                'connected': info.get('connected', False)
-            })
-        return cabot_list
-
     def get_connected_cabots_list(self) -> list:
         current_time = datetime.now()
         cabot_list = []
@@ -78,7 +66,7 @@ class RobotStateManager:
             try:
                 last_poll = datetime.fromisoformat(robot_info.get('last_poll', ''))
                 time_since_last_poll = (current_time - last_poll).seconds
-                if robot_info.get('status') is 'connected':
+                if robot_info.get('status') == 'connected':
                     is_connected = time_since_last_poll < self.POLLING_TIMEOUT  # Use timeout value
                 else:
                     is_connected = False

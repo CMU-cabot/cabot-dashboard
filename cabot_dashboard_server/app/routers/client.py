@@ -73,7 +73,8 @@ async def poll(
         logger.error(f"Error in poll for {client_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
     finally:
-        robot_manager.update_robot_status(client_id, {"status": "disconnected"})
+        robot_manager.update_robot_status(client_id, "disconnected")
+        robot_manager.update_robot_message(client_id, "")
 
 @router.post("/send/{client_id}")
 async def send_status(

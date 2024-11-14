@@ -27,7 +27,7 @@ class Config:
             log_level=os.environ.get('CABOT_DASHBOARD_LOG_LEVEL', 'INFO'),
             log_to_file=os.environ.get('CABOT_DASHBOARD_LOG_TO_FILE', 'false').lower() == 'true',
             log_file=os.environ.get('CABOT_DASHBOARD_LOG_FILE', 'cabot.log'),
-            server_url=os.environ.get("CABOT_DASHBOARD_SERVER_URL", "http://server:8000"),
+            server_url=os.environ.get("CABOT_DASHBOARD_SERVER_URL", "http://localhost:8000"),
             api_key=os.environ.get("CABOT_DASHBOARD_API_KEY", "your_secret_api_key_here"),
             max_retries=int(os.environ.get("CABOT_DASHBOARD_MAX_RETRIES", "5")),
             retry_delay=int(os.environ.get("CABOT_DASHBOARD_RETRY_DELAY", "5")),
