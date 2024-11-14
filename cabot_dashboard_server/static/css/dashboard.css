@@ -79,3 +79,15 @@ button:disabled {
     opacity: 0.6;
     cursor: not-allowed;
 }
+
+.logout-form {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+}
+
+.logout-button {
+    padding: 10px 20px;
+    font-size: 16px;
+    cursor: pointer;
+}

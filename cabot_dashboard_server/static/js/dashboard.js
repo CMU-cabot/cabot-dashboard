@@ -89,11 +89,11 @@ function addMessage(message, type) {
 }
 
 function updateCabotList(cabots) {
-    cabotsDiv.innerHTML = '<h2>Connected Cabots</h2>';
+    cabotsDiv.innerHTML = '<h2>Connected AI Suitcases</h2>';
     const table = document.createElement('table');
     table.innerHTML = `
         <tr>
-            <th>Cabot ID</th>
+            <th>ID</th>
             <th>Status</th>
             <th>Actions</th>
             <th>Last Poll Time</th>

@@ -13,6 +13,14 @@ class RobotStateManager:
             cls._instance.messages = []
             cls._instance.POLLING_TIMEOUT = settings.polling_timeout
             cls._instance.MAX_MESSAGES = 1000  # Maximum number of messages to retain
+        for cabot_id in settings.allowed_cabot_id_list:
+            cls._instance.connected_cabots[cabot_id] = {
+                "id": cabot_id,
+                "status": "unknown",
+                "last_poll": None,
+                "message": "",
+                "connected": False
+            }
         return cls._instance
 
     def __init__(self):
@@ -64,11 +72,16 @@ class RobotStateManager:
         logger.debug(f"Getting all cabots from: {self.connected_cabots}")
         for robot_id, robot_info in self.connected_cabots.items():
             try:
-                last_poll = datetime.fromisoformat(robot_info.get('last_poll', ''))
-                time_since_last_poll = (current_time - last_poll).seconds
-                if robot_info.get('status') == 'connected':
-                    is_connected = time_since_last_poll < self.POLLING_TIMEOUT  # Use timeout value
+                last_poll_str = robot_info.get('last_poll')
+                if last_poll_str:
+                    last_poll = datetime.fromisoformat(last_poll_str)
+                    time_since_last_poll = (current_time - last_poll).seconds
+                    if robot_info.get('status') == 'connected':
+                        is_connected = time_since_last_poll < self.POLLING_TIMEOUT
+                    else:
+                        is_connected = False
                 else:
+                    time_since_last_poll = None
                     is_connected = False
 
                 cabot_list.append({

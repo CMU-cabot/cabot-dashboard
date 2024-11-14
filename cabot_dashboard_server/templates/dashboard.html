@@ -8,10 +8,10 @@
 </head>
 <body>
     <div id="dashboard">
-        <h1>Cabot Dashboard</h1>
+        <!--h1>Cabot Dashboard</h1-->
         <p>Welcome, {{ user }}</p>
-        <form action="/logout" method="post">
-            <input type="submit" value="Logout">
+        <form action="/logout" method="post" class="logout-form">
+            <input type="submit" value="Logout" class="logout-button">
         </form>
 
         <div id="cabots"></div>
