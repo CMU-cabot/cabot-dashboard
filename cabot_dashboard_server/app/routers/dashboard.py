@@ -21,7 +21,17 @@ async def dashboard_page(
     auth_service: AuthService = Depends(get_auth_service)
 ):
     try:
-        if not session_token or not auth_service.validate_session(session_token, timeout=3600):
+        logger.info(f"Accessing dashboard with session_token: {session_token[:10] if session_token else 'None'}...")
+        
+        if not session_token:
+            logger.warning("No session token provided")
+            return RedirectResponse(url="/login")
+            
+        is_valid = auth_service.validate_session(session_token, timeout=3600)
+        logger.info(f"Session validation result: {is_valid}")
+        
+        if not is_valid:
+            logger.warning("Invalid or expired session token")
             return RedirectResponse(url="/login")
 
         return templates.TemplateResponse(
@@ -31,10 +41,14 @@ async def dashboard_page(
                 "base_url": request.base_url,
                 "api_key": settings.api_key,
                 "debug_mode": settings.debug_mode,
-                "user": "user1"  # TODO 一時的な対処
+                "user": "user1"  # TODO ユーザ名となるものを表示する
             }
         )
-    except ValueError:
+    except ValueError as ve:
+        logger.error(f"ValueError in dashboard_page: {str(ve)}")
+        return RedirectResponse(url="/login")
+    except Exception as e:
+        logger.error(f"Unexpected error in dashboard_page: {str(e)}")
         return RedirectResponse(url="/login")
 
 @router.get("/receive")
