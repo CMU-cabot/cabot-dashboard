@@ -20,10 +20,14 @@ def get_msal_app():
         authority=authority
     )
 
+def get_base_url(request: Request) -> str:
+    protocol = request.headers.get('X-Forwarded-Proto', 'http')
+    return f"{protocol}://{request.headers.get('Host', request.base_url.hostname)}"
+
 @router.get("/signin")
 async def microsoft_signin(request: Request):
     try:
-        redirect_uri = str(request.base_url) + "auth/microsoft/callback"
+        redirect_uri = get_base_url(request) + "/auth/microsoft/callback"
         logging.info(f"Starting signin process with redirect_uri: {redirect_uri}")
         auth_url = (
             f"https://login.microsoftonline.com/{settings.microsoft_tenant_id}/oauth2/v2.0/authorize?"
@@ -57,7 +61,7 @@ async def microsoft_callback(
             logging.error("No code received in callback")
             return RedirectResponse(url="/login?error=no_code")
         msal_app = get_msal_app()
-        redirect_uri = urljoin(str(request.base_url), settings.microsoft_redirect_path)
+        redirect_uri = urljoin(get_base_url(request), settings.microsoft_redirect_path)
         result = await _acquire_token(msal_app, code, redirect_uri)
         user_info = await _get_user_info(result['access_token'])
         email = user_info.get("userPrincipalName")
