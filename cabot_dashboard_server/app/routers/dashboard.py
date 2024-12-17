@@ -21,15 +21,18 @@ async def dashboard_page(
     auth_service: AuthService = Depends(get_auth_service)
 ):
     try:
-        if not session_token or not auth_service.validate_session(session_token, timeout=3600):
-            return RedirectResponse(url="/login")
+        if not session_token or not await auth_service.validate_token(session_token):
+            return RedirectResponse(url="/login", status_code=303)
+
+        user = await auth_service.get_current_user_from_token(session_token)
+        if not user:
+            return RedirectResponse(url="/login", status_code=303)
 
         return templates.TemplateResponse(
             "dashboard.html",
             {
                 "request": request,
                 "base_url": request.base_url,
-                "api_key": settings.api_key,
                 "debug_mode": settings.debug_mode,
                 "user": "user1"  # TODO 一時的な対処
             }
@@ -39,9 +42,13 @@ async def dashboard_page(
 
 @router.get("/receive")
 async def receive_updates(
-    api_key: str = Depends(get_api_key),
+    session_token: str = Cookie(None),
+    auth_service: AuthService = Depends(get_auth_service),
     robot_manager = Depends(get_robot_state_manager)
 ):
+    if not session_token or not await auth_service.validate_token(session_token):
+        raise HTTPException(status_code=401, detail="Invalid session")
+
     try:
         connected_cabot_list = robot_manager.get_connected_cabots_list()
         return {
@@ -57,11 +64,15 @@ async def receive_updates(
 async def send_command(
     robot_id: str,
     command: Dict,
+    session_token: str = Cookie(None),
+    auth_service: AuthService = Depends(get_auth_service),
     robot_manager: RobotStateManager = Depends(get_robot_state_manager),
-    command_queue_manager: CommandQueueManager = Depends(get_command_queue_manager),
-    api_key: str = Depends(get_api_key)
+    command_queue_manager: CommandQueueManager = Depends(get_command_queue_manager)
 ):
     try:
+        if not session_token or not await auth_service.validate_token(session_token):
+            raise HTTPException(status_code=403, detail="Invalid session")
+
         if robot_id not in robot_manager.connected_cabots:
             raise HTTPException(
                 status_code=404,

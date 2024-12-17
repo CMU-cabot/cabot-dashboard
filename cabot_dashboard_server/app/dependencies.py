@@ -28,13 +28,18 @@ async def get_api_key(api_key: str = Depends(api_key_header)) -> str:
 async def get_current_user(
     session_token: Optional[str] = Cookie(None)
 ) -> str:
-    user_id = auth_service.validate_session(session_token)
-    if not user_id:
+    if not session_token:
         raise HTTPException(
             status_code=401,
             detail="Authentication required"
         )
-    return user_id
+    user = await auth_service.get_current_user_from_token(session_token)
+    if not user:
+        raise HTTPException(
+            status_code=401,
+            detail="Authentication required"
+        )
+    return user.username
 
 def get_auth_service() -> AuthService:
     return auth_service
