@@ -29,7 +29,6 @@ def get_robot_state_manager():
 app.include_router(auth.router)
 app.include_router(
     client.router,
-    prefix="/api/client",
     dependencies=[Depends(get_robot_state_manager)]
 )
 app.include_router(dashboard.router)

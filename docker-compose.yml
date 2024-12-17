@@ -12,6 +12,9 @@ services:
       - CABOT_DASHBOARD_POLL_TIMEOUT
       - CABOT_DASHBOARD_DEBUG_MODE
       - CABOT_DASHBOARD_ALLOWED_CABOT_IDS
+      - CABOT_DASHBOARD_ACCESS_TOKEN_EXPIRE_MINUTES
+      - CABOT_DASHBOARD_CLIENTS
+      - CABOT_DASHBOARD_JWT_SECRET_KEY
     logging:
       driver: "json-file"
       options:
@@ -40,6 +43,8 @@ services:
       - CABOT_DASHBOARD_LOG_TO_FILE
       - CABOT_DASHBOARD_POLLING_INTERVAL
       - CABOT_DASHBOARD_CABOT_ID
+      - CABOT_DASHBOARD_CLIENT_ID
+      - CABOT_DASHBOARD_CLIENT_SECRET
     network_mode: host
     logging:
       driver: "json-file"

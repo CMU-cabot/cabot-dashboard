@@ -1,22 +1,22 @@
 from fastapi import APIRouter, Depends, HTTPException, Response
+from app.dependencies import get_api_key, get_robot_state_manager, get_command_queue_manager
 from app.services.robot_state import RobotStateManager
 from app.services.command_queue import CommandQueueManager
-from app.dependencies import (
-    get_api_key,
-    get_command_queue_manager,
-    get_robot_state_manager
-)
+from typing import Dict
 from app.utils.logger import logger
 import asyncio
 
-router = APIRouter(tags=["client"])
+router = APIRouter(
+    prefix="/api/client",
+    tags=["client"],
+    dependencies=[Depends(get_api_key)]
+)
 
 @router.post("/connect/{client_id}")
 async def connect(
     client_id: str,
     robot_manager: RobotStateManager = Depends(get_robot_state_manager),
-    command_queue_manager: CommandQueueManager = Depends(get_command_queue_manager),
-    api_key: str = Depends(get_api_key)
+    command_queue_manager: CommandQueueManager = Depends(get_command_queue_manager)
 ):
     try:
         robot_manager.update_robot_state(client_id, {
@@ -36,8 +36,7 @@ async def send_command(
     cabot_id: str,
     command: dict,
     robot_manager: RobotStateManager = Depends(get_robot_state_manager),
-    command_queue_manager: CommandQueueManager = Depends(get_command_queue_manager),
-    api_key: str = Depends(get_api_key)
+    command_queue_manager: CommandQueueManager = Depends(get_command_queue_manager)
 ):
     try:
         if cabot_id not in robot_manager.connected_cabots:
@@ -57,8 +56,7 @@ async def send_command(
 async def poll(
     client_id: str,
     robot_manager: RobotStateManager = Depends(get_robot_state_manager),
-    command_queue_manager: CommandQueueManager = Depends(get_command_queue_manager),
-    api_key: str = Depends(get_api_key)
+    command_queue_manager: CommandQueueManager = Depends(get_command_queue_manager)
 ):
     if client_id not in robot_manager.connected_cabots:
         logger.warning(f"Poll attempted for disconnected client {client_id}")
