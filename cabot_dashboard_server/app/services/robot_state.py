@@ -17,7 +17,7 @@ class RobotStateManager:
             cls._instance.connected_cabots[cabot_id] = {
                 "id": cabot_id,
                 "status": "unknown",
-                "cabot_status": "unknown",
+                "system_status": "unknown",
                 "last_poll": None,
                 "message": "",
                 "connected": False
@@ -33,7 +33,7 @@ class RobotStateManager:
         self.connected_cabots[client_id] = {
             "id": client_id,
             "status": state.get("status", "unknown"),
-            "cabot_status": state.get("cabot_status", "unknown"),
+            "system_status": state.get("system_status", "unknown"),
             "last_poll": datetime.now().isoformat(),
             "message": state.get("message", "")
         }
@@ -89,7 +89,7 @@ class RobotStateManager:
                 cabot_list.append({
                     'id': robot_id,
                     'status': robot_info.get('status', 'unknown'),
-                    'cabot_status': robot_info.get('cabot_status', 'unknown'),
+                    'system_status': robot_info.get('system_status', 'unknown'),
                     'last_poll': robot_info.get('last_poll'),
                     'message': robot_info.get('message', ''),
                     'connected': is_connected,
@@ -103,7 +103,7 @@ class RobotStateManager:
                 cabot_list.append({
                     'id': robot_id,
                     'status': 'error',
-                    'cabot_status': 'unknown',
+                    'system_status': 'unknown',
                     'message': str(e),
                     'connected': False,
                     'polling_timeout': self.POLLING_TIMEOUT

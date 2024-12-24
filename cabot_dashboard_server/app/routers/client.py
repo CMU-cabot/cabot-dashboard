@@ -67,12 +67,12 @@ async def poll(
         raise HTTPException(status_code=404, detail="Robot not connected")
     try:
         body = await request.json()
-        status = body.get("status", "unknown")
-        logger.debug(f"Received poll request from {client_id} with status: {status}")
+        system_status = body.get("cabot_system_status", "unknown")
+        logger.debug(f"Received poll request from {client_id} with system_status: {system_status}")
 
         state = {
             "status": "connected",
-            "cabot_status": status,
+            "system_status": system_status,
             "message": ""
         }
         robot_manager.update_robot_state(client_id, state)

@@ -155,7 +155,7 @@ class CabotDashboardClient:
         except Exception as e:
             await self.send_status(session, f"Error executing command {command_type}: {str(e)}")
 
-    async def get_cabot_status(self) -> str:
+    async def get_cabot_system_status(self) -> str:
         success, error = await self.system_command.execute(['systemctl', '--user', 'is-active', 'cabot'])
         if not success:
             if not error:
@@ -180,13 +180,13 @@ class CabotDashboardClient:
                 try:
                     if await self.connect(session):
                         while True:
-                            cabot_status = await self.get_cabot_status()
-                            self.logger.debug(f"Add status to poll request: {cabot_status}")
+                            cabot_system_status = await self.get_cabot_system_status()
+                            self.logger.debug(f"Add status to poll request: {cabot_system_status}")
                             status_code, data = await self._make_request(
                                 session, 
                                 'get', 
                                 f"poll/{self.cabot_id}",
-                                {"status": cabot_status}
+                                {"cabot_system_status": cabot_system_status}
                             )
 
                             if status_code == 200:
