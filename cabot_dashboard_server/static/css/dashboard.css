@@ -91,3 +91,58 @@ button:disabled {
     font-size: 16px;
     cursor: pointer;
 }
+
+.status-connected { 
+    color: #2ecc71;
+    font-weight: bold;
+}
+
+.status-disconnected { 
+    color: #e74c3c;
+    font-weight: bold;
+}
+
+.status-running {
+    color: #2ecc71;
+    font-weight: bold;
+}
+
+.status-stopped {
+    color: #e74c3c;
+    font-weight: bold;
+}
+
+.status-unknown {
+    color: #95a5a6;
+    font-weight: bold;
+}
+
+.status-error {
+    color: #e74c3c;
+    font-weight: bold;
+}
+
+.status-active {
+    color: #2ecc71;
+    font-weight: bold;
+}
+
+.status-inactive {
+    color: #e74c3c;
+    font-weight: bold;
+}
+
+.status-failed {
+    color: #c0392b;
+    font-weight: bold;
+}
+
+.status-deactivating {
+    color: #f39c12;
+    font-weight: bold;
+}
+
+.status-unknown {
+    color: #95a5a6;
+    font-weight: bold;
+}
