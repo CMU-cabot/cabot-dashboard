@@ -1,7 +1,9 @@
-from datetime import datetime
 from typing import Dict, List
+from datetime import datetime
 from app.utils.logger import logger
 from app.config import settings
+from app.services.websocket import manager as websocket_manager
+import asyncio
 
 class RobotStateManager:
     _instance = None
@@ -28,6 +30,16 @@ class RobotStateManager:
         # Empty since initialization is done in __new__
         pass
 
+    async def _notify_state_change(self):
+        """Notify all connected dashboard clients about state changes"""
+        try:
+            await websocket_manager.broadcast({
+                "cabots": self.get_connected_cabots_list(),
+                "messages": self.messages
+            })
+        except Exception as e:
+            logger.error(f"Error broadcasting state change: {e}")
+
     def update_robot_state(self, client_id: str, state: dict):
         logger.debug(f"Updating state for {client_id}: {state}")
         self.connected_cabots[client_id] = {
@@ -38,6 +50,7 @@ class RobotStateManager:
             "message": state.get("message", "")
         }
         logger.debug(f"Updated connected_cabots: {self.connected_cabots}")
+        asyncio.create_task(self._notify_state_change())
 
     def update_robot_polling(self, client_id: str):
         if client_id in self.connected_cabots:
@@ -45,6 +58,7 @@ class RobotStateManager:
                 "status": "connected",
                 'last_poll': datetime.now().isoformat()
             })
+            asyncio.create_task(self._notify_state_change())
         else:
             logger.warning(f"Attempted to update status for unknown client: {client_id}")
             raise ValueError(f"Client {client_id} not found")
@@ -54,6 +68,7 @@ class RobotStateManager:
             self.connected_cabots[client_id].update({
                 'status': status
             })
+            asyncio.create_task(self._notify_state_change())
         else:
             logger.warning(f"Attempted to update status for unknown client: {client_id}")
             raise ValueError(f"Client {client_id} not found")
@@ -64,6 +79,7 @@ class RobotStateManager:
                 'message': message
             })
             self.add_message(client_id, message)
+            asyncio.create_task(self._notify_state_change())
         else:
             logger.warning(f"Attempted to update message for unknown client: {client_id}")
             raise ValueError(f"Client {client_id} not found")
@@ -118,6 +134,7 @@ class RobotStateManager:
             'last_command': datetime.now().isoformat(),
             'last_command_type': command.get('type')
         })
+        asyncio.create_task(self._notify_state_change())
 
     def add_message(self, client_id: str, message: str):
         timestamp = datetime.now().isoformat()
@@ -129,6 +146,7 @@ class RobotStateManager:
         self.messages.append(new_message)
         if len(self.messages) > self.MAX_MESSAGES:
             self.messages = self.messages[-self.MAX_MESSAGES:]
+        asyncio.create_task(self._notify_state_change())
 
     def get_messages(self, limit: int = 100) -> list:
         return self.messages[-limit:]

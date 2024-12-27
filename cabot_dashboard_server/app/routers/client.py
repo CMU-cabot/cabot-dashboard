@@ -32,28 +32,6 @@ async def connect(
         logger.error(f"Error connecting client {client_id}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
-@router.post("/send_command/{cabot_id}")
-async def send_command(
-    cabot_id: str,
-    command: dict,
-    robot_manager: RobotStateManager = Depends(get_robot_state_manager),
-    command_queue_manager: CommandQueueManager = Depends(get_command_queue_manager),
-    api_key: str = Depends(get_api_key)
-):
-    try:
-        if cabot_id not in robot_manager.connected_cabots:
-            raise HTTPException(status_code=404, detail="Specified cabot is not connected")
-        
-        logger.info(f"Command queued for cabot {cabot_id}: {command}")
-        await command_queue_manager.add_command(cabot_id, command)
-        return {"status": "success", "message": f"Command queued for cabot {cabot_id}"}
-    except ValueError as e:
-        logger.error(f"Invalid command format for cabot {cabot_id}: {e}")
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        logger.error(f"Error processing command for cabot {cabot_id}: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
-
 @router.get("/poll/{client_id}")
 async def poll(
     request: Request,
@@ -85,8 +63,12 @@ async def poll(
         logger.error(f"Error in poll for {client_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
     finally:
-        robot_manager.update_robot_status(client_id, "disconnected")
-        robot_manager.update_robot_message(client_id, "")
+        state = {
+            "status": "disconnected",
+            "system_status": "unknown",
+            "message": ""
+        }
+        robot_manager.update_robot_state(client_id, state)
 
 @router.post("/send/{client_id}")
 async def send_status(

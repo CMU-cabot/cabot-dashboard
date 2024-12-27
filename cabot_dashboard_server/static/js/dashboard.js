@@ -2,9 +2,42 @@ let isMessageUpdateEnabled = true;
 let displayedMessageIds = new Set();
 let selectedCabots = new Set();
 let currentAction = null;
+let ws;
 
 const messagesDiv = document.getElementById('messages');
 const cabotsDiv = document.getElementById('cabots');
+
+function initWebSocket() {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${protocol}//${window.location.host}/ws`;
+    
+    ws = new WebSocket(wsUrl);
+    
+    ws.onopen = () => {
+        addMessage('WebSocket connection established', 'status');
+        requestRefresh();
+    };
+    
+    ws.onmessage = (event) => {
+        const data = JSON.parse(event.data);
+        updateDashboard(data);
+    };
+    
+    ws.onclose = () => {
+        addMessage('WebSocket connection closed. Attempting to reconnect...', 'error');
+        setTimeout(initWebSocket, 3000);
+    };
+    
+    ws.onerror = (error) => {
+        addMessage('WebSocket connection error: ' + error.message, 'error');
+    };
+}
+
+function requestRefresh() {
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'refresh' }));
+    }
+}
 
 async function fetchWithAuth(url, options = {}) {
     const defaultOptions = {
@@ -161,13 +194,16 @@ async function sendCommand(cabotId, command) {
         commandOption: {}
     };
     
-    const options = {
-        method: 'POST',
-        body: JSON.stringify(commandData)
-    };
-    
-    await fetchWithAuth(`/send_command/${cabotId}`, options);
-    addMessage(`Command sent: ${cabotId} - ${command}`, "status");
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({
+            type: 'command',
+            cabotId: cabotId,
+            data: commandData
+        }));
+        addMessage(`Command sent: ${cabotId} - ${command}`, "status");
+    } else {
+        addMessage('WebSocket connection is not established', 'error');
+    }
 }
 
 function clearMessages() {
@@ -329,4 +365,7 @@ function handleEscKey(event) {
     }
 }
 
-setInterval(fetchUpdates, 2000);
+// Initialize WebSocket connection when the page loads
+document.addEventListener('DOMContentLoaded', initWebSocket);
+
+setInterval(requestRefresh, 5000);

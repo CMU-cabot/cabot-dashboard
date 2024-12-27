@@ -1,15 +1,14 @@
-from fastapi import APIRouter, Depends, Request, Cookie, HTTPException
+from fastapi import APIRouter, Depends, Request, Cookie, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from app.services.auth import AuthService
 from app.services.robot_state import RobotStateManager
 from app.services.command_queue import CommandQueueManager
 from app.dependencies import get_auth_service, get_api_key, get_command_queue_manager, get_robot_state_manager
-from app.utils.logger import get_logger
+from app.utils.logger import logger
 from app.config import settings
-from typing import Dict
-
-logger = get_logger(__name__)
+from typing import Dict, List
+from app.services.websocket import manager as websocket_manager
 
 router = APIRouter()
 templates = Jinja2Templates(directory="templates")
@@ -37,22 +36,6 @@ async def dashboard_page(
     except ValueError:
         return RedirectResponse(url="/login")
 
-@router.get("/receive")
-async def receive_updates(
-    api_key: str = Depends(get_api_key),
-    robot_manager = Depends(get_robot_state_manager)
-):
-    try:
-        connected_cabot_list = robot_manager.get_connected_cabots_list()
-        return {
-            "messages": robot_manager.messages,
-            "events": [],
-            "cabots": connected_cabot_list
-        }
-    except Exception as e:
-        logger.error(f"Error in receive_updates: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
-
 @router.post("/send_command/{robot_id}")
 async def send_command(
     robot_id: str,
@@ -68,10 +51,9 @@ async def send_command(
                 detail=f"Robot {robot_id} is not connected"
             )
 
-        await command_queue_manager.initialize_client(robot_id)
-        await command_queue_manager.add_command(robot_id, command)
         logger.info(f"Command sent to {robot_id}: {command}")
-        
+        await command_queue_manager.initialize_client(robot_id)
+        await command_queue_manager.add_command(robot_id, command)        
         return {"status": "success"}
     except Exception as e:
         logger.error(f"Error sending command to {robot_id}: {e}")
@@ -85,3 +67,29 @@ async def get_messages(
     robot_state_manager: RobotStateManager = Depends(get_robot_state_manager)
 ):
     return robot_state_manager.get_messages(limit)
+
+@router.websocket("/ws")
+async def websocket_endpoint(
+    websocket: WebSocket,
+    robot_manager: RobotStateManager = Depends(get_robot_state_manager)
+):
+    await websocket_manager.connect(websocket)
+    try:
+        cabot_list = robot_manager.get_connected_cabots_list()
+        await websocket_manager.broadcast({
+            "cabots": cabot_list,
+            "messages": robot_manager.get_messages(limit=100)
+        })
+        
+        while True:
+            data = await websocket.receive_json()
+            if data.get("type") == "refresh":
+                await websocket_manager.broadcast({
+                    "cabots": robot_manager.get_connected_cabots_list(),
+                    "messages": robot_manager.get_messages(limit=100)
+                })
+    except WebSocketDisconnect:
+        websocket_manager.disconnect(websocket)
+    except Exception as e:
+        logger.error(f"WebSocket error: {str(e)}")
+        websocket_manager.disconnect(websocket)
