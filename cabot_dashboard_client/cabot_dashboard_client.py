@@ -134,6 +134,7 @@ class CabotDashboardClient:
 
     async def handle_command(self, session: aiohttp.ClientSession, command: Dict[str, Any]) -> None:
         command_type = command.get('command')
+        self.logger.error(f"command: {command}")
         try:
             cmd_type = CommandType(command_type)
             command_args = self._command_handlers.get(cmd_type)

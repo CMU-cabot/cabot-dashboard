@@ -14,6 +14,22 @@
             <input type="submit" value="Logout" class="logout-button">
         </form>
 
+        <div class="action-panel">
+            <div class="action-buttons">
+                <button class="action-button" onclick="executeAction('ros-start')" id="rosStartBtn" disabled>ROS Start</button>
+                <button class="action-button" onclick="executeAction('ros-stop')" id="rosStopBtn" disabled>ROS Stop</button>
+                <button class="action-button danger" onclick="executeAction('system-reboot')" id="rebootBtn" disabled>Reboot</button>
+                <button class="action-button danger" onclick="executeAction('system-poweroff')" id="powerOffBtn" disabled>Power Off</button>
+                {% if debug_mode %}
+                <button class="action-button debug-button" onclick="executeAction('debug1')" id="debug1Btn" disabled>Debug1</button>
+                <button class="action-button debug-button" onclick="executeAction('debug2')" id="debug2Btn" disabled>Debug2</button>
+                {% endif %}
+            </div>
+            <div id="selected-cabots">
+                Selected CaBots: <span id="selected-count">0</span>
+            </div>
+        </div>
+
         <div id="cabots"></div>
         <div id="messages" style="display: none;" class="messages-container">
             <h2>Messages</h2>
@@ -22,6 +38,18 @@
                 <button id="toggleMessagesBtn" onclick="toggleMessages()">Stop Messages</button>
             </div>
             <div id="messages"></div>
+        </div>
+    </div>
+
+    <div class="dialog-overlay" id="confirmDialog">
+        <div class="dialog">
+            <h3 class="dialog-title" id="dialogTitle"></h3>
+            <p class="dialog-message">Do you want to execute the action for the following robots?</p>
+            <div class="robot-list" id="dialogRobotList"></div>
+            <div class="dialog-buttons">
+                <button class="dialog-button cancel" onclick="closeDialog()">Cancel</button>
+                <button class="dialog-button" id="confirmButton">Execute</button>
+            </div>
         </div>
     </div>
 

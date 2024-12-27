@@ -1,4 +1,4 @@
-body {
+confirmButtonbody {
     font-family: Arial, sans-serif;
     margin: 0;
     padding: 20px;
@@ -145,4 +145,128 @@ button:disabled {
 .status-unknown {
     color: #95a5a6;
     font-weight: bold;
+}
+
+.action-panel {
+    background-color: #f8f9fa;
+    padding: 15px;
+    margin-bottom: 20px;
+    border-radius: 5px;
+    border: 1px solid #ddd;
+}
+
+.action-buttons {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.cabot-checkbox {
+    margin-right: 5px;
+}
+
+.selected-row {
+    background-color: #e8f4ff;
+}
+
+.action-button {
+    padding: 8px 15px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    background-color: #007bff;
+    color: white;
+}
+
+.action-button:disabled {
+    background-color: #ccc;
+    cursor: not-allowed;
+}
+
+.action-button.danger {
+    background-color: #dc3545;
+}
+
+.debug-button {
+    background-color: #6c757d;
+}
+
+.dialog-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: none;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.dialog {
+    background: white;
+    border-radius: 8px;
+    padding: 24px;
+    width: 400px;
+    max-width: 90%;
+    box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.dialog-title {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin-bottom: 16px;
+}
+
+.dialog-message {
+    margin-bottom: 16px;
+    color: #4b5563;
+}
+
+.robot-list {
+    max-height: 200px;
+    overflow-y: auto;
+    margin-bottom: 16px;
+    padding: 8px;
+    border: 1px solid #e5e7eb;
+    border-radius: 4px;
+}
+
+.robot-list-item {
+    padding: 4px 0;
+}
+
+.dialog-buttons {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.dialog-button {
+    padding: 8px 16px;
+    border-radius: 4px;
+    border: none;
+    cursor: pointer;
+    font-weight: 500;
+}
+
+.dialog-button.cancel {
+    background-color: #e5e7eb;
+    color: #374151;
+}
+
+.dialog-button.start {
+    background-color: #059669;
+    color: white;
+}
+
+.dialog-button.restart {
+    background-color: #D97706;
+    color: white;
+}
+
+.dialog-button.stop {
+    background-color: #DC2626;
+    color: white;
 }

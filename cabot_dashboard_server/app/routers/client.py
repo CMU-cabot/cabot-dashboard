@@ -44,8 +44,8 @@ async def send_command(
         if cabot_id not in robot_manager.connected_cabots:
             raise HTTPException(status_code=404, detail="Specified cabot is not connected")
         
-        await command_queue_manager.add_command(cabot_id, command)
         logger.info(f"Command queued for cabot {cabot_id}: {command}")
+        await command_queue_manager.add_command(cabot_id, command)
         return {"status": "success", "message": f"Command queued for cabot {cabot_id}"}
     except ValueError as e:
         logger.error(f"Invalid command format for cabot {cabot_id}: {e}")
