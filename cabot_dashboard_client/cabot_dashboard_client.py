@@ -7,6 +7,7 @@ import os
 from aiohttp import ClientError
 from dataclasses import dataclass
 from typing import Optional, Tuple, Dict, Any
+import json
 
 @dataclass
 class Config:
@@ -43,6 +44,7 @@ class CommandType(Enum):
     SYSTEM_REBOOT = "system-reboot"
     SYSTEM_POWEROFF = "system-poweroff"
     CABOT_IS_ACTIVE = "cabot-is-active"
+    SOFTWARE_UPDATE = "software_update"
     DEBUG1 = "debug1"
     DEBUG2 = "debug2"
 
@@ -54,7 +56,6 @@ class SystemCommand:
         self.logger = logging.getLogger(__name__)
         
     async def execute(self, command: list[str]) -> Tuple[bool, Optional[str]]:
-
         if self.debug_mode:
             if all(cmd in command for cmd in ['systemctl', 'is-active', 'cabot']):
                 debug_status = os.environ.get('CABOT_DASHBOARD_DEBUG_STATUS', 'active')
@@ -79,6 +80,23 @@ class SystemCommand:
 
         except Exception as e:
             self.logger.error(f"Error executing command: {e}")
+            return False, str(e)
+
+    async def execute_software_update(self, images: list[dict]) -> Tuple[bool, Optional[str]]:
+        try:
+            # Use the existing execute method to run the update command
+            update_command = [
+                'sudo',
+                'systemctl',
+                'start',
+                f'cabot-software-update@{json.dumps(images)}'  # Pass images as a parameter to the service
+            ]
+            
+            self.logger.info(f"Executing software update with images: {images}")
+            return await self.execute(update_command)
+            
+        except Exception as e:
+            self.logger.error(f"Error executing software update: {e}")
             return False, str(e)
 
 def setup_logger(config: Config) -> logging.Logger:
@@ -134,11 +152,27 @@ class CabotDashboardClient:
 
     async def handle_command(self, session: aiohttp.ClientSession, command: Dict[str, Any]) -> None:
         command_type = command.get('command')
-        self.logger.error(f"command: {command}")
+        self.logger.info(f"Received command: {command}")
+        
         try:
             cmd_type = CommandType(command_type)
-            command_args = self._command_handlers.get(cmd_type)
             
+            if cmd_type == CommandType.SOFTWARE_UPDATE:
+                images = command.get('commandOption', {}).get('images', [])
+                if not images:
+                    await self.send_status(session, "No images specified for software update")
+                    return
+                
+                await self.send_status(session, f"Starting software update for {len(images)} images...")
+                success, error = await self.system_command.execute_software_update(images)
+                
+                if success:
+                    await self.send_status(session, "Software update completed successfully")
+                else:
+                    await self.send_status(session, f"Software update failed: {error}")
+                return
+            
+            command_args = self._command_handlers.get(cmd_type)
             if not command_args:
                 await self.send_status(session, f"Unknown command type: {command_type}")
                 return

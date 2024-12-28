@@ -33,7 +33,7 @@ async def dashboard_page(
                 "base_url": request.base_url,
                 "api_key": settings.api_key,
                 "debug_mode": settings.debug_mode,
-                "user": "user1",  # TODO 一時的な対処
+                "user": "user1",  # TODO: Temporary solution - needs to be replaced with proper user management
                 "docker_versions": docker_versions
             }
         )
@@ -75,7 +75,8 @@ async def get_messages(
 @router.websocket("/ws")
 async def websocket_endpoint(
     websocket: WebSocket,
-    robot_manager: RobotStateManager = Depends(get_robot_state_manager)
+    robot_manager: RobotStateManager = Depends(get_robot_state_manager),
+    command_queue_manager: CommandQueueManager = Depends(get_command_queue_manager)
 ):
     await websocket_manager.connect(websocket)
     try:
@@ -92,6 +93,19 @@ async def websocket_endpoint(
                     "cabots": robot_manager.get_connected_cabots_list(),
                     "messages": robot_manager.get_messages(limit=100)
                 })
+            elif data.get("type") == "command":
+                cabot_id = data.get("cabotId")
+                command_data = data.get("data")
+                if cabot_id and command_data:
+                    if cabot_id not in robot_manager.connected_cabots:
+                        logger.error(f"Robot {cabot_id} is not connected")
+                        continue
+                    try:
+                        await command_queue_manager.initialize_client(cabot_id)
+                        await command_queue_manager.add_command(cabot_id, command_data)
+                        logger.info(f"Command added to queue for {cabot_id}: {command_data}")
+                    except Exception as e:
+                        logger.error(f"Error adding command to queue for {cabot_id}: {e}")
     except WebSocketDisconnect:
         websocket_manager.disconnect(websocket)
     except Exception as e:
