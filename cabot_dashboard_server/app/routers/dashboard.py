@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Request, Cookie, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, Request, Cookie, HTTPException, WebSocket, WebSocketDisconnect, Body
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from app.services.auth import AuthService
@@ -9,9 +9,11 @@ from app.utils.logger import logger
 from app.config import settings
 from typing import Dict, List
 from app.services.websocket import manager as websocket_manager
+from app.services.docker_hub import DockerHubService
 
 router = APIRouter()
 templates = Jinja2Templates(directory="templates")
+docker_hub_service = DockerHubService()
 
 @router.get("/dashboard", response_class=HTMLResponse)
 async def dashboard_page(
@@ -23,6 +25,7 @@ async def dashboard_page(
         if not session_token or not auth_service.validate_session(session_token, timeout=3600):
             return RedirectResponse(url="/login")
 
+        docker_versions = docker_hub_service.get_all_cached_data()
         return templates.TemplateResponse(
             "dashboard.html",
             {
@@ -30,7 +33,8 @@ async def dashboard_page(
                 "base_url": request.base_url,
                 "api_key": settings.api_key,
                 "debug_mode": settings.debug_mode,
-                "user": "user1"  # TODO 一時的な対処
+                "user": "user1",  # TODO 一時的な対処
+                "docker_versions": docker_versions
             }
         )
     except ValueError:
@@ -93,3 +97,34 @@ async def websocket_endpoint(
     except Exception as e:
         logger.error(f"WebSocket error: {str(e)}")
         websocket_manager.disconnect(websocket)
+
+@router.post("/api/refresh-tags/{repository}")
+async def refresh_tags(repository: str):
+    try:
+        tags = await docker_hub_service.fetch_tags(repository)
+        return {"status": "success", "tags": tags}
+    except Exception as e:
+        logger.error(f"Failed to fetch tags for {repository}: {str(e)}")
+        return {
+            "status": "error",
+            "message": f"Failed to fetch tags: {str(e)}"
+        }
+
+@router.post("/api/update-image-name/{repository}")
+async def update_image_name(repository: str, name: str = Body(..., embed=True)):
+    try:
+        cached_data = docker_hub_service.get_cached_tags(repository)
+        if cached_data is None:
+            return {
+                "status": "error",
+                "message": "Repository not found"
+            }
+        
+        cached_data["name"] = name
+        return {"status": "success"}
+    except Exception as e:
+        logger.error(f"Failed to update image name for {repository}: {str(e)}")
+        return {
+            "status": "error",
+            "message": f"Failed to update image name: {str(e)}"
+        }

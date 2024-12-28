@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Dashboard</title>
     <link rel="stylesheet" href="{{ url_for('static', path='/css/dashboard.css') | replace('http://', '//') }}">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 </head>
 <body>
     <div id="dashboard">
@@ -38,6 +39,143 @@
                 <button id="toggleMessagesBtn" onclick="toggleMessages()">Stop Messages</button>
             </div>
             <div id="messages"></div>
+        </div>
+
+        <div class="master-versions">
+            <h2>Master Versions</h2>
+            <div class="version-list">
+                <div class="version-item">
+                    <div class="version-header">
+                        <div class="version-info">
+                            <input type="checkbox" class="version-checkbox" id="image1-checkbox" value="image1" 
+                                   {% if not docker_versions.get('image1', {}).get('name') %}disabled{% endif %}>
+                            <div class="version-name-container">
+                                <span class="version-name-text empty-name">
+                                    {{ docker_versions.get('image1', {}).get('name') or '+ Click here to set Docker image name' }}
+                                </span>
+                                <input type="text" class="version-name-input" style="display: none;" 
+                                       value="{{ docker_versions.get('image1', {}).get('name', '') }}" 
+                                       data-original="image1"
+                                       placeholder="+ Click here to set Docker image name">
+                                <div class="name-controls">
+                                    <button class="edit-btn" onclick="startEdit(this, 'image1')"
+                                            {% if not docker_versions.get('image1', {}).get('name') %}style="display: none;"{% endif %}>
+                                        <i class="fas fa-pencil-alt"></i>
+                                    </button>
+                                    <button class="delete-btn" onclick="deleteImageName('image1')" 
+                                            {% if not docker_versions.get('image1', {}).get('name') %}style="display: none;"{% endif %}>
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="version-tags">
+                            <select id="image1-version" {% if not docker_versions.get('image1', {}).get('name') %}disabled{% endif %}>
+                                {% for tag in docker_versions.get('image1', {}).get('tags', []) %}
+                                    <option value="{{ tag }}">{{ tag }}</option>
+                                {% endfor %}
+                            </select>
+                            <button onclick="refreshTags('image1')" class="refresh-btn" 
+                                    {% if not docker_versions.get('image1', {}).get('name') %}disabled{% endif %}>
+                                <i class="fas fa-sync-alt"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="last-updated">
+                        Last updated: {{ docker_versions.get('image1', {}).get('last_updated', '') }}
+                    </div>
+                    <div id="image1-error" class="error-message"></div>
+                </div>
+
+                <div class="version-item">
+                    <div class="version-header">
+                        <div class="version-info">
+                            <input type="checkbox" class="version-checkbox" id="image2-checkbox" value="image2" 
+                                   {% if not docker_versions.get('image2', {}).get('name') %}disabled{% endif %}>
+                            <div class="version-name-container">
+                                <span class="version-name-text empty-name">
+                                    {{ docker_versions.get('image2', {}).get('name') or '+ Click here to set Docker image name' }}
+                                </span>
+                                <input type="text" class="version-name-input" style="display: none;" 
+                                       value="{{ docker_versions.get('image2', {}).get('name', '') }}" 
+                                       data-original="image2"
+                                       placeholder="+ Click here to set Docker image name">
+                                <div class="name-controls">
+                                    <button class="edit-btn" onclick="startEdit(this, 'image2')"
+                                            {% if not docker_versions.get('image2', {}).get('name') %}style="display: none;"{% endif %}>
+                                        <i class="fas fa-pencil-alt"></i>
+                                    </button>
+                                    <button class="delete-btn" onclick="deleteImageName('image2')"
+                                            {% if not docker_versions.get('image2', {}).get('name') %}style="display: none;"{% endif %}>
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="version-tags">
+                            <select id="image2-version" {% if not docker_versions.get('image2', {}).get('name') %}disabled{% endif %}>
+                                {% for tag in docker_versions.get('image2', {}).get('tags', []) %}
+                                    <option value="{{ tag }}">{{ tag }}</option>
+                                {% endfor %}
+                            </select>
+                            <button onclick="refreshTags('image2')" class="refresh-btn" 
+                                    {% if not docker_versions.get('image2', {}).get('name') %}disabled{% endif %}>
+                                <i class="fas fa-sync-alt"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="last-updated">
+                        Last updated: {{ docker_versions.get('image2', {}).get('last_updated', '') }}
+                    </div>
+                    <div id="image2-error" class="error-message"></div>
+                </div>
+
+                <div class="version-item">
+                    <div class="version-header">
+                        <div class="version-info">
+                            <input type="checkbox" class="version-checkbox" id="image3-checkbox" value="image3" 
+                                   {% if not docker_versions.get('image3', {}).get('name') %}disabled{% endif %}>
+                            <div class="version-name-container">
+                                <span class="version-name-text empty-name">
+                                    {{ docker_versions.get('image3', {}).get('name') or '+ Click here to set Docker image name' }}
+                                </span>
+                                <input type="text" class="version-name-input" style="display: none;" 
+                                       value="{{ docker_versions.get('image3', {}).get('name', '') }}" 
+                                       data-original="image3"
+                                       placeholder="+ Click here to set Docker image name">
+                                <div class="name-controls">
+                                    <button class="edit-btn" onclick="startEdit(this, 'image3')"
+                                            {% if not docker_versions.get('image3', {}).get('name') %}style="display: none;"{% endif %}>
+                                        <i class="fas fa-pencil-alt"></i>
+                                    </button>
+                                    <button class="delete-btn" onclick="deleteImageName('image3')"
+                                            {% if not docker_versions.get('image3', {}).get('name') %}style="display: none;"{% endif %}>
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="version-tags">
+                            <select id="image3-version" {% if not docker_versions.get('image3', {}).get('name') %}disabled{% endif %}>
+                                {% for tag in docker_versions.get('image3', {}).get('tags', []) %}
+                                    <option value="{{ tag }}">{{ tag }}</option>
+                                {% endfor %}
+                            </select>
+                            <button onclick="refreshTags('image3')" class="refresh-btn" 
+                                    {% if not docker_versions.get('image3', {}).get('name') %}disabled{% endif %}>
+                                <i class="fas fa-sync-alt"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="last-updated">
+                        Last updated: {{ docker_versions.get('image3', {}).get('last_updated', '') }}
+                    </div>
+                    <div id="image3-error" class="error-message"></div>
+                </div>
+            </div>
+            <button onclick="updateSelectedVersions()" class="update-software-btn" disabled>
+                <i class="fas fa-upload"></i> Update Software
+            </button>
         </div>
     </div>
 

@@ -7,6 +7,8 @@ let ws;
 const messagesDiv = document.getElementById('messages');
 const cabotsDiv = document.getElementById('cabots');
 
+const PLACEHOLDER_TEXT = '+ Click here to set Docker image name';
+
 function initWebSocket() {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${protocol}//${window.location.host}/ws`;
@@ -364,6 +366,244 @@ function handleEscKey(event) {
         closeDialog();
     }
 }
+
+async function refreshTags(repository) {
+    const versionItem = document.getElementById(`${repository}-checkbox`).closest('.version-item');
+    const button = versionItem.querySelector('.refresh-btn');
+    const errorDiv = versionItem.querySelector('.error-message');
+    const select = versionItem.querySelector('select');
+    const lastUpdated = versionItem.querySelector('.last-updated');
+
+    try {
+        button.disabled = true;
+        button.querySelector('i').classList.add('fa-spin');
+        errorDiv.textContent = '';
+
+        const response = await fetch(`/api/refresh-tags/${repository}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-API-Key': apiKey
+            }
+        });
+        const data = await response.json();
+        
+        if (data.status === 'success') {
+            select.innerHTML = '';
+            
+            data.tags.forEach(tag => {
+                const option = document.createElement('option');
+                option.value = tag;
+                option.textContent = tag;
+                select.appendChild(option);
+            });
+            
+            lastUpdated.textContent = `Last updated: ${new Date().toISOString()}`;
+            errorDiv.textContent = '';
+        } else {
+            errorDiv.textContent = data.message || 'Failed to refresh tags.';
+        }
+    } catch (error) {
+        console.error('Failed to refresh tags:', error);
+        errorDiv.textContent = 'An error occurred while refreshing tags.';
+    } finally {
+        button.disabled = false;
+        button.querySelector('i').classList.remove('fa-spin');
+    }
+}
+
+function startEdit(element, repository) {
+    const container = element.closest('.version-name-container');
+    const textElement = container.querySelector('.version-name-text');
+    const inputElement = container.querySelector('.version-name-input');
+    
+    const currentText = textElement.textContent.trim();
+    inputElement.value = currentText === PLACEHOLDER_TEXT ? '' : currentText;
+    
+    textElement.style.display = 'none';
+    inputElement.style.display = 'block';
+    
+    inputElement.focus();
+    
+    if (inputElement.value) {
+        inputElement.select();
+    }
+}
+
+async function updateImageName(repository, newName) {
+    try {
+        const response = await fetch(`/api/update-image-name/${repository}`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-API-Key': apiKey
+            },
+            body: JSON.stringify({
+                name: newName
+            })
+        });
+        
+        let data;
+        try {
+            data = await response.json();
+        } catch (e) {
+            console.error('Failed to parse response:', e);
+            throw new Error('Invalid server response');
+        }
+        
+        if (!response.ok || data.status === 'error') {
+            throw new Error(data?.message || 'Failed to save image name');
+        }
+        
+        return true;
+    } catch (error) {
+        console.error('Failed to update image name:', error);
+        const errorDiv = document.getElementById(`${repository}-error`);
+        errorDiv.textContent = error.message || 'Failed to update image name';
+        return false;
+    }
+}
+
+function updateImageControls(imageId, hasName) {
+    const checkbox = document.getElementById(`${imageId}-checkbox`);
+    const select = document.getElementById(`${imageId}-version`);
+    const refreshBtn = checkbox.closest('.version-item').querySelector('.refresh-btn');
+    const deleteBtn = checkbox.closest('.version-item').querySelector('.delete-btn');
+    const editBtn = checkbox.closest('.version-item').querySelector('.edit-btn');
+    const nameText = checkbox.closest('.version-item').querySelector('.version-name-text');
+
+    checkbox.disabled = !hasName;
+    select.disabled = !hasName;
+    refreshBtn.disabled = !hasName;
+    deleteBtn.style.display = hasName ? 'block' : 'none';
+    editBtn.style.display = hasName ? 'block' : 'none';
+    
+    if (!hasName) {
+        nameText.textContent = PLACEHOLDER_TEXT;
+        nameText.classList.add('empty-name');
+        checkbox.checked = false;
+    } else {
+        nameText.classList.remove('empty-name');
+    }
+    
+    updateUpdateButton();
+}
+
+function deleteImageName(imageId) {
+    const versionItem = document.getElementById(`${imageId}-checkbox`).closest('.version-item');
+    const nameText = versionItem.querySelector('.version-name-text');
+    const nameInput = versionItem.querySelector('.version-name-input');
+    const errorDiv = versionItem.querySelector('.error-message');
+
+    errorDiv.textContent = '';
+
+    fetch(`/api/update-image-name/${imageId}`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-API-Key': apiKey
+        },
+        body: JSON.stringify({
+            name: '',
+            delete: true
+        })
+    })
+    .then(async response => {
+        if (!response.ok) {
+            const data = await response.json().catch(() => ({}));
+            throw new Error(data?.message || 'Failed to delete image name');
+        }
+        
+        nameText.textContent = PLACEHOLDER_TEXT;
+        nameText.classList.add('empty-name');
+        nameInput.value = '';
+        updateImageControls(imageId, false);
+    })
+    .catch(error => {
+        console.error('Error deleting image name:', error);
+        errorDiv.textContent = error.message || 'Failed to delete image name';
+    });
+}
+
+function finishEdit(input, shouldSave = true) {
+    const container = input.closest('.version-name-container');
+    const textElement = container.querySelector('.version-name-text');
+    const errorDiv = container.closest('.version-item').querySelector('.error-message');
+    const newName = input.value.trim();
+    const repository = input.dataset.original;
+    
+    errorDiv.textContent = '';
+    
+    if (!shouldSave || newName === '') {
+        const originalText = textElement.textContent.trim();
+        input.value = originalText === PLACEHOLDER_TEXT ? '' : originalText;
+        textElement.style.display = 'block';
+        input.style.display = 'none';
+        return;
+    }
+
+    updateImageName(repository, newName)
+        .then(success => {
+            if (success) {
+                textElement.textContent = newName;
+                textElement.classList.remove('empty-name');
+                updateImageControls(repository, true);
+            } else {
+                const originalText = textElement.textContent.trim();
+                input.value = originalText === PLACEHOLDER_TEXT ? '' : originalText;
+            }
+        })
+        .finally(() => {
+            textElement.style.display = 'block';
+            input.style.display = 'none';
+        });
+}
+
+function updateUpdateButton() {
+    const checkedBoxes = document.querySelectorAll('.version-checkbox:checked');
+    const updateButton = document.querySelector('.update-software-btn');
+    updateButton.disabled = checkedBoxes.length === 0;
+}
+
+function initializeImageNameHandlers() {
+    document.querySelectorAll('.version-name-text').forEach(textElement => {
+        textElement.addEventListener('click', function() {
+            const container = this.closest('.version-name-container');
+            const input = container.querySelector('.version-name-input');
+            startEdit(this, input.dataset.original);
+        });
+    });
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    initWebSocket();
+    
+    document.querySelectorAll('.version-name-input').forEach(input => {
+        input.addEventListener('blur', () => finishEdit(input, true));
+
+        input.addEventListener('keypress', (event) => {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                finishEdit(input, true);
+            }
+        });
+
+        input.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                finishEdit(input, false);
+            }
+        });
+    });
+
+    document.querySelectorAll('.version-checkbox').forEach(checkbox => {
+        checkbox.addEventListener('change', updateUpdateButton);
+    });
+
+    initializeImageNameHandlers();
+
+    updateUpdateButton();
+});
 
 // Initialize WebSocket connection when the page loads
 document.addEventListener('DOMContentLoaded', initWebSocket);
