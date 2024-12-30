@@ -10,6 +10,7 @@ from app.config import settings
 from typing import Dict, List
 from app.services.websocket import manager as websocket_manager
 from app.services.docker_hub import DockerHubService
+import json
 
 router = APIRouter()
 templates = Jinja2Templates(directory="templates")
@@ -40,38 +41,6 @@ async def dashboard_page(
     except ValueError:
         return RedirectResponse(url="/login")
 
-@router.post("/send_command/{robot_id}")
-async def send_command(
-    robot_id: str,
-    command: Dict,
-    robot_manager: RobotStateManager = Depends(get_robot_state_manager),
-    command_queue_manager: CommandQueueManager = Depends(get_command_queue_manager),
-    api_key: str = Depends(get_api_key)
-):
-    try:
-        if robot_id not in robot_manager.connected_cabots:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Robot {robot_id} is not connected"
-            )
-
-        logger.info(f"Command sent to {robot_id}: {command}")
-        await command_queue_manager.initialize_client(robot_id)
-        await command_queue_manager.add_command(robot_id, command)        
-        return {"status": "success"}
-    except Exception as e:
-        logger.error(f"Error sending command to {robot_id}: {e}")
-        if isinstance(e, HTTPException):
-            raise e
-        raise HTTPException(status_code=500, detail=str(e))
-
-@router.get("/messages")
-async def get_messages(
-    limit: int = 100,
-    robot_state_manager: RobotStateManager = Depends(get_robot_state_manager)
-):
-    return robot_state_manager.get_messages(limit)
-
 @router.websocket("/ws")
 async def websocket_endpoint(
     websocket: WebSocket,
@@ -80,8 +49,10 @@ async def websocket_endpoint(
 ):
     await websocket_manager.connect(websocket)
     try:
+        # Send initial robot state
         cabot_list = robot_manager.get_connected_cabots_list()
         await websocket_manager.broadcast({
+            "type": "robot_state",
             "cabots": cabot_list,
             "messages": robot_manager.get_messages(limit=100)
         })
@@ -89,56 +60,45 @@ async def websocket_endpoint(
         while True:
             data = await websocket.receive_json()
             if data.get("type") == "refresh":
+                # Send updated robot state
                 await websocket_manager.broadcast({
+                    "type": "robot_state",
                     "cabots": robot_manager.get_connected_cabots_list(),
                     "messages": robot_manager.get_messages(limit=100)
                 })
             elif data.get("type") == "command":
                 cabot_id = data.get("cabotId")
-                command_data = data.get("data")
+                command_data = data.get("command")
+                command_option = data.get("commandOption", {})
                 if cabot_id and command_data:
                     if cabot_id not in robot_manager.connected_cabots:
                         logger.error(f"Robot {cabot_id} is not connected")
                         continue
                     try:
                         await command_queue_manager.initialize_client(cabot_id)
-                        await command_queue_manager.add_command(cabot_id, command_data)
-                        logger.info(f"Command added to queue for {cabot_id}: {command_data}")
+                        command_mapping = {
+                            'ros_start': 'ros-start',
+                            'ros_stop': 'ros-stop',
+                            'power_off': 'system-poweroff',
+                            'reboot': 'system-reboot',
+                            'software_update': 'software_update'
+                        }
+                        formatted_command = {
+                            'command': command_mapping.get(command_data, command_data),
+                            'commandOption': command_option
+                        }
+                        logger.info(f"Command added to queue for {cabot_id}: {formatted_command}")
+                        await command_queue_manager.add_command(cabot_id, formatted_command)
                     except Exception as e:
                         logger.error(f"Error adding command to queue for {cabot_id}: {e}")
+            elif data.get("type") == "refresh_tags":
+                response = await websocket_manager.handle_refresh_tags(data)
+                await websocket.send_json(response)
+            elif data.get("type") == "update_image_name":
+                response = await websocket_manager.handle_update_image_name(data)
+                await websocket.send_json(response)
     except WebSocketDisconnect:
         websocket_manager.disconnect(websocket)
     except Exception as e:
         logger.error(f"WebSocket error: {str(e)}")
         websocket_manager.disconnect(websocket)
-
-@router.post("/api/refresh-tags/{repository}")
-async def refresh_tags(repository: str):
-    try:
-        tags = await docker_hub_service.fetch_tags(repository)
-        return {"status": "success", "tags": tags}
-    except Exception as e:
-        logger.error(f"Failed to fetch tags for {repository}: {str(e)}")
-        return {
-            "status": "error",
-            "message": f"Failed to fetch tags: {str(e)}"
-        }
-
-@router.post("/api/update-image-name/{repository}")
-async def update_image_name(repository: str, name: str = Body(..., embed=True)):
-    try:
-        cached_data = docker_hub_service.get_cached_tags(repository)
-        if cached_data is None:
-            return {
-                "status": "error",
-                "message": "Repository not found"
-            }
-        
-        cached_data["name"] = name
-        return {"status": "success"}
-    except Exception as e:
-        logger.error(f"Failed to update image name for {repository}: {str(e)}")
-        return {
-            "status": "error",
-            "message": f"Failed to update image name: {str(e)}"
-        }

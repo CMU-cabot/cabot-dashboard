@@ -1,727 +1,876 @@
-let isMessageUpdateEnabled = true;
-let displayedMessageIds = new Set();
-let selectedCabots = new Set();
+// WebSocket connection
+let ws = null;
+let isConnected = false;
+let selectedRobots = new Set();
+let currentFilter = 'all';
+let robotStateManager = null;
+
+// Dialog related variables
 let currentAction = null;
-let ws;
-
-const messagesDiv = document.getElementById('messages');
-const cabotsDiv = document.getElementById('cabots');
-
 const PLACEHOLDER_TEXT = '+ Click here to set Docker image name';
 
+// Initialize WebSocket connection
 function initWebSocket() {
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${protocol}//${window.location.host}/ws`;
-    
-    ws = new WebSocket(wsUrl);
+    ws = new WebSocket(`ws://${window.location.host}/ws`);
     
     ws.onopen = () => {
-        addMessage('WebSocket connection established', 'status');
-        requestRefresh();
-    };
-    
-    ws.onmessage = (event) => {
-        const data = JSON.parse(event.data);
-        updateDashboard(data);
+        console.log('WebSocket connected');
+        isConnected = true;
+        updateConnectionStatus();
     };
     
     ws.onclose = () => {
-        addMessage('WebSocket connection closed. Attempting to reconnect...', 'error');
-        setTimeout(initWebSocket, 3000);
+        console.log('WebSocket disconnected');
+        isConnected = false;
+        updateConnectionStatus();
+        setTimeout(initWebSocket, 5000);
     };
     
-    ws.onerror = (error) => {
-        addMessage('WebSocket connection error: ' + error.message, 'error');
-    };
-}
+    ws.onmessage = (event) => {
+        try {
+            const data = JSON.parse(event.data);
+            console.log('WebSocket received data:', data);
 
-function requestRefresh() {
-    if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: 'refresh' }));
-    }
-}
-
-async function fetchWithAuth(url, options = {}) {
-    const defaultOptions = {
-        headers: {
-            'X-API-Key': apiKey,
-            'Content-Type': 'application/json'
-        },
-        timeout: 5000
-    };
-
-    const mergedOptions = { 
-        ...defaultOptions, 
-        ...options,
-        headers: {
-            ...defaultOptions.headers,
-            ...(options.headers || {})
+            switch (data.type) {
+                case 'robot_state':
+                    console.log('Received robot state update:', data);
+                    if (data.cabots) {
+                        console.log('Updating dashboard with cabots:', data.cabots);
+                        updateDashboard(data);
+                    }
+                    if (data.messages) {
+                        console.log('Updating message list:', data.messages);
+                        updateMessageList(data.messages);
+                    }
+                    break;
+                case 'refresh_tags_response':
+                    console.log('Received tags refresh response:', data);
+                    handleTagsResponse(data);
+                    break;
+                case 'update_image_name_response':
+                    console.log('Received image name update response:', data);
+                    handleImageNameResponse(data);
+                    break;
+                case 'update_software_response':
+                    console.log('Received software update response:', data);
+                    handleSoftwareUpdateResponse(data);
+                    break;
+                default:
+                    console.log('Unknown message type:', data.type);
+            }
+        } catch (error) {
+            console.error('WebSocket message processing error:', error);
+            console.log('Raw event data:', event.data);
         }
     };
-
-    const response = await fetch(url, mergedOptions);
-    if (!response.ok) {
-        throw new Error(`HTTP Error! Status: ${response.status}`);
-    }
-    return await response.json();
 }
 
-async function fetchUpdates() {
-    const data = await fetchWithAuth('/receive');
-    updateDashboard(data);
-}
-
-function updateDashboard(data) {
-    messagesDiv.style.display = debugMode ? 'block' : 'none';
-    if (data.cabots) {
-        updateCabotList(data.cabots);
-    }
-    if (data.messages) {
-        updateMessages(data.messages);
-    }
-}
-
-function updateMessages(messages) {
-    if (!isMessageUpdateEnabled || !messages || messages.length === 0) return;
-
-    let messageList = messagesDiv.querySelector('ul') || document.createElement('ul');
-    if (!messagesDiv.contains(messageList)) {
-        messagesDiv.appendChild(messageList);
-    }
-
-    messages.forEach(message => {
-        const messageId = `${message.timestamp}-${message.client_id}`;
-        
-        if (!displayedMessageIds.has(messageId)) {
-            const messageText = typeof message.message === 'object' ? 
-                JSON.stringify(message.message) : message.message;
-
-            const li = document.createElement('li');
-            li.setAttribute('data-message-id', messageId);
-            li.textContent = `${new Date(message.timestamp).toLocaleString()} - ${message.client_id}: ${messageText}`;
-            messageList.appendChild(li);
-            
-            displayedMessageIds.add(messageId);
-        }
-    });
-
-    messagesDiv.scrollTop = messagesDiv.scrollHeight;
-}
-
-function addMessage(message, type) {
-    if (!isMessageUpdateEnabled) return;
-    const messageList = messagesDiv.querySelector('ul') || document.createElement('ul');
-    if (!messagesDiv.contains(messageList)) {
-        messagesDiv.appendChild(messageList);
-    }
-
-    const messageText = typeof message === 'object' ? 
-        JSON.stringify(message) : message;
-
-    const li = document.createElement('li');
-    li.className = type;
-    li.textContent = `${new Date().toLocaleString()} - ${messageText}`;
-    messageList.appendChild(li);
-    messagesDiv.scrollTop = messagesDiv.scrollHeight;
-}
-
-function updateCabotList(cabots) {
-    cabotsDiv.innerHTML = '<h2>Connected AI Suitcases</h2>';
-    const table = document.createElement('table');
-    table.innerHTML = `
-        <tr>
-            <th><input type="checkbox" id="select-all" onclick="toggleAllCabots(this)"></th>
-            <th>ID</th>
-            <th>Polling Status</th>
-            <th>System Status</th>
-            <th>Last Poll Time</th>
-            <th>Message</th>
-        </tr>
-    `;
-    
-    cabots.forEach(cabot => {
-        const row = table.insertRow();
-        
-        // Checkbox cell
-        const checkboxCell = row.insertCell();
-        const checkbox = document.createElement('input');
-        checkbox.type = 'checkbox';
-        checkbox.className = 'cabot-checkbox';
-        checkbox.value = cabot.id;
-        checkbox.checked = selectedCabots.has(cabot.id);
-        checkbox.onclick = () => toggleCabot(cabot.id);
-        if (!cabot.connected) {
-            checkbox.disabled = true;
-        }
-        checkboxCell.appendChild(checkbox);
-
-        row.insertCell().textContent = cabot.id || 'Unknown';
-        
-        const pollingStatusCell = row.insertCell();
-        pollingStatusCell.textContent = cabot.connected ? 'Connected' : 'Disconnected';
-        pollingStatusCell.className = cabot.connected ? 'status-connected' : 'status-disconnected';
-
-        const systemStatusCell = row.insertCell();
-        systemStatusCell.textContent = cabot.system_status || 'Unknown';
-        systemStatusCell.className = `status-${cabot.system_status ? cabot.system_status.toLowerCase() : 'unknown'}`;
-        
-        const lastPollCell = row.insertCell();
-        lastPollCell.textContent = formatDateTime(cabot.last_poll) || 'Unknown';
-        
-        row.insertCell().textContent = cabot.message || '';
-
-        if (selectedCabots.has(cabot.id)) {
-            row.classList.add('selected-row');
-        }
-    });
-    
-    cabotsDiv.appendChild(table);
-    updateActionButtons();
-}
-
-function formatDateTime(dateTimeString) {
-    if (!dateTimeString) return 'Unknown';
-    const date = new Date(dateTimeString);
-    return date.toLocaleString();
-}
-
-async function sendCommand(cabotId, command) {
-    const actionButtons = document.querySelectorAll('.action-button');
-    actionButtons.forEach(button => {
-        button.disabled = true;
-    });
-
-    try {
-        if (ws && ws.readyState === WebSocket.OPEN) {
-            const commandData = {
-                command: command.command,
-                commandOption: command.commandOption || {}
-            };
-            
-            ws.send(JSON.stringify({
-                type: 'command',
-                cabotId: cabotId,
-                data: commandData
-            }));
-            addMessage(`Command sent to ${cabotId}: ${command.command}`, "status");
-        } else {
-            throw new Error('WebSocket connection is not established');
-        }
-    } catch (error) {
-        addMessage(`Failed to send command: ${error.message}`, "error");
-        throw error;
-    } finally {
-        setTimeout(() => {
-            updateActionButtons();
-        }, 1000);
-    }
-}
-
-function clearMessages() {
-    const messageList = messagesDiv.querySelector('ul');
-    if (messageList) {
-        messageList.innerHTML = '';
-        displayedMessageIds.clear();
-    }
-}
-
-function toggleMessages() {
-    isMessageUpdateEnabled = !isMessageUpdateEnabled;
-    const toggleBtn = document.getElementById('toggleMessagesBtn');
-    toggleBtn.textContent = isMessageUpdateEnabled ? 'Stop Messages' : 'Resume Messages';
-    toggleBtn.classList.toggle('button-disabled', !isMessageUpdateEnabled);
-}
-
-function toggleCabot(cabotId) {
-    if (selectedCabots.has(cabotId)) {
-        selectedCabots.delete(cabotId);
+// Update connection status display
+function updateConnectionStatus() {
+    const statusBadge = document.querySelector('.navbar .badge');
+    if (isConnected) {
+        statusBadge.classList.remove('bg-danger');
+        statusBadge.classList.add('bg-success');
+        statusBadge.textContent = 'Connected';
     } else {
-        selectedCabots.add(cabotId);
+        statusBadge.classList.remove('bg-success');
+        statusBadge.classList.add('bg-danger');
+        statusBadge.textContent = 'Disconnected';
     }
-    updateActionButtons();
-    updateSelectedCount();
-    highlightSelectedRows();
 }
 
-function toggleAllCabots(checkbox) {
-    const cabotCheckboxes = document.querySelectorAll('.cabot-checkbox:not(:disabled)');
-    selectedCabots.clear();
+// Show confirmation dialog
+function showConfirmDialog(command) {
+    const dialog = document.getElementById('confirmDialog');
+    const selectedRobotsList = document.getElementById('selectedRobots');
+    const confirmButton = document.getElementById('confirmAction');
+    const dialogTitle = document.getElementById('dialogTitle');
+    const dialogOverlay = document.getElementById('dialogOverlay');
     
-    if (checkbox.checked) {
-        cabotCheckboxes.forEach(cb => {
-            selectedCabots.add(cb.value);
-        });
-    }
-    
-    updateActionButtons();
-    updateSelectedCount();
-    highlightSelectedRows();
-}
-
-function updateActionButtons() {
-    const hasSelection = selectedCabots.size > 0;
-    document.querySelectorAll('.action-button').forEach(button => {
-        button.disabled = !hasSelection;
-    });
-}
-
-function updateSelectedCount() {
-    document.getElementById('selected-count').textContent = selectedCabots.size;
-}
-
-function highlightSelectedRows() {
-    document.querySelectorAll('tr').forEach(row => {
-        const checkbox = row.querySelector('.cabot-checkbox');
-        if (checkbox) {
-            row.classList.toggle('selected-row', checkbox.checked);
-        }
-    });
-}
-
-async function executeAction(command) {
-    if (command === 'software-update') {
-        const selectedImages = getSelectedImages();
-        if (selectedImages.length === 0) {
-            addMessage('Please select at least one Docker image to update', 'error');
-            return;
-        }
-        showConfirmDialog(command);
+    if (!dialog || !selectedRobotsList || !confirmButton || !dialogTitle || !dialogOverlay) {
+        console.error('Dialog elements not found');
         return;
     }
+    
+    // Update dialog content
+    selectedRobotsList.innerHTML = Array.from(selectedRobots)
+        .map(robotId => `<li>${robotId}</li>`)
+        .join('');
+    
+    // Set current action
+    currentAction = command;
+    
+    // Update dialog title and button
+    dialogTitle.textContent = `Confirm ${command}`;
+    confirmButton.textContent = `Execute ${command}`;
+    
+    // Show overlay and dialog
+    dialogOverlay.style.display = 'flex';
+    
+    // Clear any previous error messages
+    const errorDiv = document.getElementById('dialogError');
+    if (errorDiv) {
+        errorDiv.style.display = 'none';
+        errorDiv.textContent = '';
+    }
+}
+
+// Close confirmation dialog
+function closeDialog() {
+    const dialogOverlay = document.getElementById('dialogOverlay');
+    if (dialogOverlay) {
+        dialogOverlay.style.display = 'none';
+    }
+    currentAction = null;
+    currentVersions = null;
+}
+
+// Execute confirmed action
+async function executeAction() {
+    if (!currentAction || selectedRobots.size === 0) return;
+
+    try {
+        const promises = Array.from(selectedRobots).map(robotId => {
+            return new Promise((resolve, reject) => {
+                let commandData = currentAction;
+                let commandOption = null;
+
+                if (currentAction === 'software_update') {
+                    // ソフトウェアアップデートの場合、選択されたバージョン情報を収集
+                    const selectedImages = [];
+                    console.log('Checking version items...');
+                    
+                    // バージョン項目を直接取得
+                    const versionItems = document.querySelectorAll('.version-item');
+                    console.log('Found version items:', versionItems.length);
+                    
+                    versionItems.forEach(item => {
+                        const checkbox = item.querySelector('input[type="checkbox"].version-checkbox');
+                        console.log('Found checkbox:', checkbox);
+                        console.log('Checkbox checked:', checkbox?.checked);
+                        
+                        if (checkbox && checkbox.checked) {
+                            const imageId = checkbox.id.replace('-checkbox', '');
+                            console.log('Processing checked image ID:', imageId);
+                            
+                            const select = document.getElementById(`${imageId}-version`);
+                            const nameText = item.querySelector('.version-name-text');
+                            
+                            console.log('Select element:', select);
+                            console.log('Name text element:', nameText);
+                            console.log('Select value:', select?.value);
+                            console.log('Name text content:', nameText?.textContent);
+                            
+                            if (select && nameText && nameText.textContent && 
+                                nameText.textContent !== '+ Click here to set Docker image name') {
+                                const imageInfo = {
+                                    name: nameText.textContent.trim(),
+                                    version: select.value
+                                };
+                                console.log('Adding image info:', imageInfo);
+                                selectedImages.push(imageInfo);
+                            }
+                        }
+                    });
+                    
+                    console.log('Selected images array:', selectedImages);
+                    if (selectedImages.length > 0) {
+                        commandOption = {
+                            images: selectedImages
+                        };
+                        console.log('Final commandOption:', commandOption);
+                    }
+                }
+
+                const message = {
+                    type: 'command',
+                    cabotId: robotId,
+                    command: commandData,
+                    commandOption: commandOption || {}
+                };
+
+                console.log('Final message to send:', JSON.stringify(message, null, 2));
+                ws.send(JSON.stringify(message));
+                resolve();
+            });
+        });
+
+        await Promise.all(promises);
+        closeDialog();
+    } catch (error) {
+        console.error('Error executing action:', error);
+        const errorDiv = document.getElementById('dialogError');
+        if (errorDiv) {
+            errorDiv.textContent = error.message || 'Failed to execute action';
+            errorDiv.style.display = 'block';
+        }
+    }
+}
+
+// Send command to robot
+function sendCommand(command) {
+    const actionError = document.getElementById('actionError');
+    
+    // Clear previous error message
+    if (actionError) {
+        actionError.style.display = 'none';
+        actionError.textContent = '';
+    }
+
+    if (selectedRobots.size === 0) {
+        if (actionError) {
+            actionError.textContent = 'Please select at least one robot before executing an action.';
+            actionError.style.display = 'block';    
+        }
+        return;
+    }
+
     showConfirmDialog(command);
 }
 
-async function executeActionWithConfirm() {
-    const selectedCabotsList = Array.from(selectedCabots);
-    if (currentAction === 'software-update') {
-        const selectedImages = getSelectedImages();
-        for (const cabotId of selectedCabotsList) {
-            try {
-                const commandData = {
-                    command: 'software_update',
-                    commandOption: {
-                        images: selectedImages.map(img => ({
-                            name: img.name,
-                            version: img.version
-                        }))
-                    }
-                };
-                await sendCommand(cabotId, commandData);
-            } catch (error) {
-                addMessage(`Error sending software update command to ${cabotId}: ${error}`, 'error');
-            }
-        }
-    } else {
-        for (const cabotId of selectedCabotsList) {
-            try {
-                const commandData = {
-                    command: currentAction,
-                    commandOption: {}
-                };
-                await sendCommand(cabotId, commandData);
-            } catch (error) {
-                addMessage(`Error sending command to ${cabotId}: ${error}`, 'error');
-            }
-        }
-    }
-    closeDialog();
-}
-
-function getSelectedImages() {
-    const selectedImages = [];
-    document.querySelectorAll('.version-checkbox:checked').forEach(checkbox => {
-        const imageId = checkbox.value;
-        const versionSelect = document.getElementById(`${imageId}-version`);
-        const nameElement = checkbox.closest('.version-item').querySelector('.version-name-text');
-        if (versionSelect && nameElement) {
-            selectedImages.push({
-                name: nameElement.textContent.trim(),
-                version: versionSelect.value
-            });
-        }
-    });
-    return selectedImages;
-}
-
-function showConfirmDialog(command) {
-    currentAction = command;
-    const dialog = document.getElementById('confirmDialog');
-    const title = document.getElementById('dialogTitle');
-    const robotList = document.getElementById('dialogRobotList');
-    
-    let titleText = '';
-    let additionalInfo = '';
-    
-    switch (command) {
-        case 'software-update':
-            titleText = 'Software Update';
-            const selectedImages = getSelectedImages();
-            additionalInfo = '<div class="update-details"><h4>Selected Updates:</h4><ul>' +
-                selectedImages.map(img => `<li>${img.name}: ${img.version}</li>`).join('') +
-                '</ul></div>';
-            break;
-        case 'ros-start':
-            titleText = 'Start ROS';
-            break;
-        case 'ros-stop':
-            titleText = 'Stop ROS';
-            break;
-        case 'system-reboot':
-            titleText = 'System Reboot';
-            break;
-        case 'system-poweroff':
-            titleText = 'System Power Off';
-            break;
-        default:
-            titleText = command;
+// Update dashboard with new data
+function updateDashboard(data) {
+    // Clear any existing error messages
+    const actionError = document.getElementById('actionError');
+    if (actionError) {
+        actionError.style.display = 'none';
+        actionError.textContent = '';
     }
     
-    title.textContent = titleText;
-    robotList.innerHTML = Array.from(selectedCabots).map(id => `<div class="robot-item">${id}</div>`).join('') + additionalInfo;
-    
-    dialog.style.display = 'flex';
-    const confirmButton = document.getElementById('confirmButton');
-    confirmButton.onclick = executeActionWithConfirm;
-
-    // Add escape key handler
-    document.addEventListener('keydown', handleEscKey);
-}
-
-function handleEscKey(event) {
-    if (event.key === 'Escape') {
-        closeDialog();
+    console.log('Updating dashboard with data:', data);
+    const robotList = document.querySelector('.robot-list');
+    if (!robotList) {
+        console.error('Robot list container not found');
+        return;
     }
-}
+    robotList.innerHTML = '';
 
-function closeDialog() {
-    const dialog = document.getElementById('confirmDialog');
-    dialog.style.display = 'none';
-    currentAction = null;
-    document.removeEventListener('keydown', handleEscKey);
-}
+    if (!data.cabots || data.cabots.length === 0) {
+        robotList.innerHTML = '<div class="text-center text-muted p-3">No robots connected</div>';
+        return;
+    }
 
-async function refreshTags(repository) {
-    const versionItem = document.getElementById(`${repository}-checkbox`).closest('.version-item');
-    const button = versionItem.querySelector('.refresh-btn');
-    const errorDiv = versionItem.querySelector('.error-message');
-    const select = versionItem.querySelector('select');
-    const lastUpdated = versionItem.querySelector('.last-updated');
-
-    try {
-        button.disabled = true;
-        button.querySelector('i').classList.add('fa-spin');
-        errorDiv.textContent = '';
-
-        const response = await fetch(`/api/refresh-tags/${repository}`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-API-Key': apiKey
+    // Filter and display robots
+    const filteredRobots = data.cabots
+        .filter(robot => {
+            switch (currentFilter) {
+                case 'warnings':
+                    return robot.warnings && robot.warnings.length > 0;
+                case 'disconnected':
+                    return !robot.connected;
+                default:
+                    return true;
             }
         });
-        const data = await response.json();
-        
-        if (data.status === 'success') {
+
+    filteredRobots.forEach(robot => {
+        const robotCard = document.createElement('div');
+        robotCard.className = 'robot-card mb-3';
+        robotCard.innerHTML = `
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <div class="form-check">
+                    <input class="form-check-input robot-checkbox" type="checkbox" value="${robot.id}"
+                        ${selectedRobots.has(robot.id) ? 'checked' : ''}
+                        ${!robot.connected ? 'disabled' : ''}>
+                    <label class="form-check-label fw-bold">${robot.id}</label>
+                </div>
+                <div>
+                    <span class="badge ${robot.connected ? 'bg-success' : 'bg-danger'} me-1">
+                        ${robot.connected ? 'Connected' : 'Disconnected'}
+                    </span>
+                    <span class="badge ${robot.system_status === 'active' ? 'bg-primary' : 'bg-warning'}">
+                        ${robot.system_status}
+                    </span>
+                </div>
+            </div>
+            <div class="robot-info">
+                <p class="text-muted mb-2">Last Poll: ${formatDateTime(robot.last_poll)}</p>
+                <p class="mb-2">${robot.message || '---'}</p>
+                <div class="d-flex justify-content-between">
+                    <span class="version-tag">docker: ${robot.docker_version || 'N/A'}</span>
+                    <span class="version-tag">sites: ${robot.sites_version || 'N/A'}</span>
+                    <span class="version-tag">map: ${robot.map_version || 'N/A'}</span>
+                </div>
+            </div>
+        `;
+
+        const checkbox = robotCard.querySelector('.robot-checkbox');
+        checkbox.addEventListener('change', (e) => {
+            if (e.target.checked) {
+                selectedRobots.add(robot.id);
+            } else {
+                selectedRobots.delete(robot.id);
+            }
+            updateSelectedCount();
+            updateSelectAllCheckbox();
+        });
+
+        robotList.appendChild(robotCard);
+    });
+
+    updateSelectedCount();
+    updateSelectAllCheckbox();
+}
+
+// Format date time
+function formatDateTime(dateTimeString) {
+    if (!dateTimeString) return 'Unknown';
+    
+    try {
+        // UTCの文字列をDateオブジェクトに変換し、JSTで表示
+        const date = new Date(dateTimeString + 'Z');  // 'Z'を追加してUTCとして解釈
+        return date.toLocaleString('ja-JP', { 
+            timeZone: 'Asia/Tokyo',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: false
+        }).replace(/\//g, '/');
+    } catch (error) {
+        console.error('Error formatting date:', error);
+        return dateTimeString;  // エラーの場合は元の文字列を返す
+    }
+}
+
+// Handle tags response
+function handleTagsResponse(data) {
+    const imageId = data.image_id;
+    const versionItem = document.querySelector(`#version-${imageId}`);
+    if (!versionItem) {
+        console.error('Version item not found for image:', imageId);
+        return;
+    }
+
+    const select = versionItem.querySelector('select');
+    const errorDiv = versionItem.querySelector('.error-message');
+    const checkbox = versionItem.querySelector('.version-checkbox');
+    
+    if (data.status === 'error') {
+        if (errorDiv) {
+            errorDiv.textContent = data.message || 'Failed to fetch tags';
+        }
+        if (checkbox) {
+            checkbox.disabled = true;
+        }
+        return;
+    }
+
+    // Clear and update options
+    if (select) {
+        select.innerHTML = '';
+        data.tags.forEach(tag => {
+            const option = document.createElement('option');
+            option.value = tag;
+            option.textContent = tag;
+            select.appendChild(option);
+        });
+
+        // タグが取得できた場合、チェックボックスを有効化
+        if (data.tags.length > 0 && checkbox) {
+            checkbox.disabled = false;
+        }
+    }
+
+    // Update last updated timestamp
+    const lastUpdated = versionItem.querySelector('.last-updated');
+    if (lastUpdated) {
+        lastUpdated.textContent = `Last updated: ${new Date().toLocaleString('ja-JP', { 
+            timeZone: 'Asia/Tokyo',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: false
+        }).replace(/\//g, '/')}`;
+    }
+
+    if (errorDiv) {
+        errorDiv.textContent = '';
+    }
+}
+
+// Handle image name response
+function handleImageNameResponse(data) {
+    const imageId = data.image_id;
+    const versionItem = document.querySelector(`#version-${imageId}`);
+    if (!versionItem) {
+        console.error('Version item not found for image:', imageId);
+        return;
+    }
+
+    const nameText = versionItem.querySelector('.version-name-text');
+    const nameInput = versionItem.querySelector('.version-name-input');
+    const select = versionItem.querySelector('select');
+    const refreshBtn = versionItem.querySelector('.refresh-btn');
+    const errorDiv = versionItem.querySelector('.error-message');
+    
+    if (data.status === 'success') {
+        if (nameText) {
+            nameText.textContent = data.image_name;
+            nameText.classList.remove('empty-name');
+        }
+        if (nameInput) {
+            nameInput.value = data.image_name;
+            nameInput.dataset.original = data.image_name;
+        }
+        if (select) {
+            select.disabled = false;
+        }
+        if (refreshBtn) {
+            refreshBtn.disabled = false;
+        }
+    } else {
+        if (errorDiv) {
+            errorDiv.textContent = data.message || 'Failed to update image name';
+        }
+        if (nameText) {
+            nameText.textContent = nameInput.dataset.original || PLACEHOLDER_TEXT;
+            if (!nameInput.dataset.original) {
+                nameText.classList.add('empty-name');
+            }
+        }
+    }
+    
+    if (nameInput) {
+        nameInput.style.display = 'none';
+    }
+    if (nameText) {
+        nameText.style.display = 'block';
+    }
+}
+
+// Initialize the dashboard
+document.addEventListener('DOMContentLoaded', () => {
+    console.log('Initializing dashboard...');
+    
+    // Initialize RobotStateManager if available
+    if (window.RobotStateManager) {
+        robotStateManager = new window.RobotStateManager();
+    }
+    
+    initWebSocket();
+    
+    // Add select all handler
+    const selectAllCheckbox = document.getElementById('select-all');
+    if (selectAllCheckbox) {
+        selectAllCheckbox.addEventListener('change', (e) => {
+            toggleAllRobots(e.target.checked);
+        });
+    }
+    
+    // Add dialog event handlers
+    const confirmButton = document.getElementById('confirmAction');
+    const cancelButton = document.getElementById('cancelAction');
+    const dialog = document.getElementById('confirmDialog');
+    const dialogOverlay = document.getElementById('dialogOverlay');
+    
+    if (confirmButton) {
+        confirmButton.addEventListener('click', executeAction);
+    }
+    
+    if (cancelButton) {
+        cancelButton.addEventListener('click', closeDialog);
+    }
+    
+    // Add escape key handler for dialog
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && dialog && dialog.style.display === 'block') {
+            closeDialog();
+        }
+    });
+    
+    // Add click outside dialog handler
+    if (dialogOverlay) {
+        dialogOverlay.addEventListener('click', (event) => {
+            if (event.target === dialogOverlay) {
+                closeDialog();
+            }
+        });
+    }
+    
+    // Initialize Docker Hub version items
+    const dockerVersions = window.dockerVersions || {};
+    Object.entries(dockerVersions).forEach(([key, image]) => {
+        const versionItem = document.querySelector(`#version-${key}`);
+        if (!versionItem) return;
+
+        // Set image name
+        const nameText = versionItem.querySelector('.version-name-text');
+        const nameInput = versionItem.querySelector('.version-name-input');
+        if (nameText && nameInput) {
+            nameText.textContent = image.name || PLACEHOLDER_TEXT;
+            nameText.classList.toggle('empty-name', !image.name);
+            nameInput.value = image.name || '';
+            nameInput.dataset.original = image.name || '';
+        }
+
+        // Set tags
+        const select = versionItem.querySelector('select');
+        if (select) {
             select.innerHTML = '';
-            
-            data.tags.forEach(tag => {
+            (image.tags || []).forEach(tag => {
                 const option = document.createElement('option');
                 option.value = tag;
                 option.textContent = tag;
                 select.appendChild(option);
             });
-            
-            lastUpdated.textContent = `Last updated: ${new Date().toISOString()}`;
-            errorDiv.textContent = '';
-        } else {
-            errorDiv.textContent = data.message || 'Failed to refresh tags.';
         }
-    } catch (error) {
-        console.error('Failed to refresh tags:', error);
-        errorDiv.textContent = 'An error occurred while refreshing tags.';
-    } finally {
-        button.disabled = false;
-        button.querySelector('i').classList.remove('fa-spin');
+
+        // Set last updated
+        const lastUpdated = versionItem.querySelector('.last-updated');
+        if (lastUpdated && image.last_updated) {
+            lastUpdated.textContent = `Last updated: ${formatDateTime(image.last_updated)}`;
+        }
+
+        // Update controls state
+        updateImageControls(key, !!image.name);
+
+        // Add click handlers
+        const nameTextElement = versionItem.querySelector('.version-name-text');
+        if (nameTextElement) {
+            nameTextElement.addEventListener('click', () => {
+                startEdit(nameTextElement);
+            });
+        }
+    });
+});
+
+// Update image controls visibility and state
+function updateImageControls(imageId, hasImageName) {
+    const versionItem = document.querySelector(`#version-${imageId}`);
+    if (!versionItem) return;
+
+    const select = versionItem.querySelector('select');
+    const refreshBtn = versionItem.querySelector('.refresh-btn');
+    const nameText = versionItem.querySelector('.version-name-text');
+    const checkbox = versionItem.querySelector('.version-checkbox');
+    
+    if (select) select.disabled = !hasImageName;
+    if (refreshBtn) refreshBtn.disabled = !hasImageName;
+    if (nameText) nameText.classList.toggle('empty-name', !hasImageName);
+    if (checkbox) {
+        checkbox.disabled = !hasImageName || (select && select.options.length === 0);
     }
 }
 
-function startEdit(element, repository) {
-    const container = element.closest('.version-name-container');
-    const textElement = container.querySelector('.version-name-text');
-    const inputElement = container.querySelector('.version-name-input');
+// Start editing image name
+function startEdit(element) {
+    const versionItem = element.closest('.version-item');
+    const textElement = versionItem.querySelector('.version-name-text');
+    const inputElement = versionItem.querySelector('.version-name-input');
     
+    // Get current text
     const currentText = textElement.textContent.trim();
     inputElement.value = currentText === PLACEHOLDER_TEXT ? '' : currentText;
     
+    // Toggle display
     textElement.style.display = 'none';
     inputElement.style.display = 'block';
-    
     inputElement.focus();
     
     if (inputElement.value) {
         inputElement.select();
     }
-}
 
-async function updateImageName(repository, newName) {
-    try {
-        const response = await fetch(`/api/update-image-name/${repository}`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-API-Key': apiKey
-            },
-            body: JSON.stringify({
-                name: newName
-            })
-        });
-        
-        let data;
-        try {
-            data = await response.json();
-        } catch (e) {
-            console.error('Failed to parse response:', e);
-            throw new Error('Invalid server response');
-        }
-        
-        if (!response.ok || data.status === 'error') {
-            throw new Error(data?.message || 'Failed to save image name');
-        }
-        
-        return true;
-    } catch (error) {
-        console.error('Failed to update image name:', error);
-        const errorDiv = document.getElementById(`${repository}-error`);
-        errorDiv.textContent = error.message || 'Failed to update image name';
-        return false;
+    // Add event listeners
+    function handleBlur() {
+        finishEdit(inputElement);
+        inputElement.removeEventListener('blur', handleBlur);
+        inputElement.removeEventListener('keypress', handleKeyPress);
+        inputElement.removeEventListener('keydown', handleKeyDown);
     }
-}
 
-function updateImageControls(imageId, hasName) {
-    const checkbox = document.getElementById(`${imageId}-checkbox`);
-    const select = document.getElementById(`${imageId}-version`);
-    const refreshBtn = checkbox.closest('.version-item').querySelector('.refresh-btn');
-    const deleteBtn = checkbox.closest('.version-item').querySelector('.delete-btn');
-    const editBtn = checkbox.closest('.version-item').querySelector('.edit-btn');
-    const nameText = checkbox.closest('.version-item').querySelector('.version-name-text');
-
-    checkbox.disabled = !hasName;
-    select.disabled = !hasName;
-    refreshBtn.disabled = !hasName;
-    deleteBtn.style.display = hasName ? 'block' : 'none';
-    editBtn.style.display = hasName ? 'block' : 'none';
-    
-    if (!hasName) {
-        nameText.textContent = PLACEHOLDER_TEXT;
-        nameText.classList.add('empty-name');
-        checkbox.checked = false;
-    } else {
-        nameText.classList.remove('empty-name');
+    function handleKeyPress(e) {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            finishEdit(inputElement);
+            inputElement.removeEventListener('blur', handleBlur);
+            inputElement.removeEventListener('keypress', handleKeyPress);
+            inputElement.removeEventListener('keydown', handleKeyDown);
+        }
     }
-    
-    updateUpdateButton();
+
+    function handleKeyDown(e) {
+        if (e.key === 'Escape') {
+            e.preventDefault();
+            textElement.style.display = 'block';
+            inputElement.style.display = 'none';
+            inputElement.removeEventListener('blur', handleBlur);
+            inputElement.removeEventListener('keypress', handleKeyPress);
+            inputElement.removeEventListener('keydown', handleKeyDown);
+        }
+    }
+
+    inputElement.addEventListener('blur', handleBlur);
+    inputElement.addEventListener('keypress', handleKeyPress);
+    inputElement.addEventListener('keydown', handleKeyDown);
 }
 
-function deleteImageName(imageId) {
-    const versionItem = document.getElementById(`${imageId}-checkbox`).closest('.version-item');
-    const nameText = versionItem.querySelector('.version-name-text');
-    const nameInput = versionItem.querySelector('.version-name-input');
+// Finish editing image name
+async function finishEdit(input) {
+    const versionItem = input.closest('.version-item');
+    const imageId = input.dataset.imageId;
+    const textElement = versionItem.querySelector('.version-name-text');
     const errorDiv = versionItem.querySelector('.error-message');
-
-    errorDiv.textContent = '';
-
-    fetch(`/api/update-image-name/${imageId}`, {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-API-Key': apiKey
-        },
-        body: JSON.stringify({
-            name: '',
-            delete: true
-        })
-    })
-    .then(async response => {
-        if (!response.ok) {
-            const data = await response.json().catch(() => ({}));
-            throw new Error(data?.message || 'Failed to delete image name');
-        }
-        
-        nameText.textContent = PLACEHOLDER_TEXT;
-        nameText.classList.add('empty-name');
-        nameInput.value = '';
-        updateImageControls(imageId, false);
-    })
-    .catch(error => {
-        console.error('Error deleting image name:', error);
-        errorDiv.textContent = error.message || 'Failed to delete image name';
-    });
-}
-
-function finishEdit(input, shouldSave = true) {
-    const container = input.closest('.version-name-container');
-    const textElement = container.querySelector('.version-name-text');
-    const errorDiv = container.closest('.version-item').querySelector('.error-message');
     const newName = input.value.trim();
-    const repository = input.dataset.original;
     
     errorDiv.textContent = '';
     
-    if (!shouldSave || newName === '') {
-        const originalText = textElement.textContent.trim();
-        input.value = originalText === PLACEHOLDER_TEXT ? '' : originalText;
+    if (newName === '') {
+        textElement.textContent = PLACEHOLDER_TEXT;
+        textElement.classList.add('empty-name');
+        updateImageControls(imageId, false);
         textElement.style.display = 'block';
         input.style.display = 'none';
         return;
     }
 
-    updateImageName(repository, newName)
-        .then(success => {
-            if (success) {
-                textElement.textContent = newName;
-                textElement.classList.remove('empty-name');
-                updateImageControls(repository, true);
-            } else {
-                const originalText = textElement.textContent.trim();
-                input.value = originalText === PLACEHOLDER_TEXT ? '' : originalText;
-            }
-        })
-        .finally(() => {
-            textElement.style.display = 'block';
-            input.style.display = 'none';
+    try {
+        console.log('Sending update_image_name message:', {
+            type: 'update_image_name',
+            image_id: imageId,
+            image_name: newName
         });
+
+        ws.send(JSON.stringify({
+            type: 'update_image_name',
+            image_id: imageId,
+            image_name: newName
+        }));
+
+        // 一時的に表示を更新（レスポンスで確定または元に戻す）
+        textElement.textContent = newName;
+        textElement.classList.remove('empty-name');
+        updateImageControls(imageId, true);
+        input.dataset.original = newName;
+    } catch (error) {
+        console.error('Failed to update image name:', error);
+        errorDiv.textContent = error.message || 'Failed to update image name';
+        textElement.textContent = input.dataset.original || PLACEHOLDER_TEXT;
+        if (!input.dataset.original) {
+            textElement.classList.add('empty-name');
+            updateImageControls(imageId, false);
+        }
+    } finally {
+        textElement.style.display = 'block';
+        input.style.display = 'none';
+    }
 }
 
-function updateUpdateButton() {
-    const checkedBoxes = document.querySelectorAll('.version-checkbox:checked');
-    const updateButton = document.querySelector('.update-software-btn');
-    updateButton.disabled = checkedBoxes.length === 0;
-}
-
-function initializeImageNameHandlers() {
-    document.querySelectorAll('.version-name-text').forEach(textElement => {
-        textElement.addEventListener('click', function() {
-            const container = this.closest('.version-name-container');
-            const input = container.querySelector('.version-name-input');
-            startEdit(this, input.dataset.original);
+// Refresh tags for a robot
+async function refreshTags(imageId) {
+    try {
+        console.log('Sending refresh_tags message:', {
+            type: 'refresh_tags',
+            image_id: imageId
         });
-    });
+
+        ws.send(JSON.stringify({
+            type: 'refresh_tags',
+            image_id: imageId
+        }));
+    } catch (error) {
+        console.error('Failed to refresh tags:', error);
+        const errorDiv = document.querySelector(`#${imageId}-error`);
+        if (errorDiv) {
+            errorDiv.textContent = error.message || 'Failed to refresh tags';
+        }
+    }
 }
 
-function updateVersionCheckboxState(imageId) {
-    const versionSelect = document.getElementById(`${imageId}-version`);
-    const checkbox = document.getElementById(`${imageId}-checkbox`);
+// Toggle all robots
+function toggleAllRobots(checked) {
+    const checkboxes = document.querySelectorAll('.robot-checkbox:not(:disabled)');
+    selectedRobots.clear();
     
-    if (versionSelect && checkbox) {
-        // Disable checkbox if no version is selected
-        checkbox.disabled = !versionSelect.value;
-        
-        // Uncheck if disabled
-        if (!versionSelect.value) {
+    if (checked) {
+        checkboxes.forEach(checkbox => {
+            selectedRobots.add(checkbox.value);
+            checkbox.checked = true;
+        });
+    } else {
+        checkboxes.forEach(checkbox => {
             checkbox.checked = false;
-        }
-        
-        // Update the update button state
-        updateUpdateButton();
+        });
+    }
+    
+    updateSelectedCount();
+}
+
+// Update select all checkbox state
+function updateSelectAllCheckbox() {
+    const selectAllCheckbox = document.getElementById('select-all');
+    const checkboxes = document.querySelectorAll('.robot-checkbox:not(:disabled)');
+    const checkedBoxes = document.querySelectorAll('.robot-checkbox:checked');
+    
+    if (checkboxes.length === 0) {
+        selectAllCheckbox.checked = false;
+        selectAllCheckbox.disabled = true;
+    } else {
+        selectAllCheckbox.disabled = false;
+        selectAllCheckbox.checked = checkboxes.length === checkedBoxes.length;
     }
 }
 
-document.addEventListener('DOMContentLoaded', function() {
-    initWebSocket();
-    
-    // Add version select change handlers
-    document.querySelectorAll('select[id$="-version"]').forEach(select => {
-        const imageId = select.id.replace('-version', '');
-        
-        // Initial state
-        updateVersionCheckboxState(imageId);
-        
-        // Handle version selection changes
-        select.addEventListener('change', () => {
-            updateVersionCheckboxState(imageId);
-        });
-    });
-
-    document.querySelectorAll('.version-name-input').forEach(input => {
-        input.addEventListener('blur', () => finishEdit(input, true));
-
-        input.addEventListener('keypress', (event) => {
-            if (event.key === 'Enter') {
-                event.preventDefault();
-                finishEdit(input, true);
-            }
-        });
-
-        input.addEventListener('keydown', (event) => {
-            if (event.key === 'Escape') {
-                event.preventDefault();
-                finishEdit(input, false);
-            }
-        });
-    });
-
-    document.querySelectorAll('.version-checkbox').forEach(checkbox => {
-        checkbox.addEventListener('change', updateUpdateButton);
-    });
-
-    initializeImageNameHandlers();
-    updateUpdateButton();
-});
-
-// Initialize WebSocket connection when the page loads
-document.addEventListener('DOMContentLoaded', initWebSocket);
-
-setInterval(requestRefresh, 5000);
-
-function showUpdateError(message) {
-    const versionsDiv = document.querySelector('.master-versions');
-    let errorDiv = versionsDiv.querySelector('.update-error-message');
-    
-    if (!errorDiv) {
-        errorDiv = document.createElement('div');
-        errorDiv.className = 'update-error-message';
-        const updateButton = versionsDiv.querySelector('.update-software-btn');
-        updateButton.parentNode.insertBefore(errorDiv, updateButton);
+// Update selected robots count
+function updateSelectedCount() {
+    const selectedCount = document.querySelector('.selected-count');
+    if (selectedCount) {
+        selectedCount.textContent = `(${selectedRobots.size}/5)`;
     }
-    
-    errorDiv.textContent = message;
-    errorDiv.style.display = 'block';
-    
-    // Clear error message after 3 seconds
-    setTimeout(() => {
-        errorDiv.style.display = 'none';
-    }, 3000);
 }
 
-function validateUpdate() {
-    const selectedCabots = Array.from(document.querySelectorAll('.cabot-checkbox:checked')).map(cb => cb.value);
-    if (selectedCabots.length === 0) {
-        showUpdateError('Please select at least one AI Suitcase from the list');
-        return false;
-    }
+// Update message list
+function updateMessageList(messages) {
+    const messageList = document.querySelector('.message-list');
+    if (!messageList) return;
 
-    const selectedImages = document.querySelectorAll('.version-checkbox:checked');
-    if (selectedImages.length === 0) {
-        showUpdateError('Please select at least one Docker image to update');
-        return false;
-    }
-
-    // Validate that each selected image has a tag selected
-    for (const imageCheckbox of selectedImages) {
-        const imageId = imageCheckbox.value;
-        const versionSelect = document.getElementById(`${imageId}-version`);
-        if (!versionSelect || !versionSelect.value) {
-            showUpdateError('Please select a version tag for all selected Docker images');
-            return false;
-        }
-    }
-
-    return true;
-}
-
-function updateSelectedVersions() {
-    if (!validateUpdate()) {
+    messageList.innerHTML = '';
+    
+    if (!messages || messages.length === 0) {
+        messageList.innerHTML = '<div class="text-center text-muted p-3">No messages</div>';
         return;
     }
-    executeAction('software-update');
+
+    messages.forEach(msg => {
+        const messageItem = document.createElement('div');
+        messageItem.className = 'message-item p-2 border-bottom';
+        messageItem.innerHTML = `
+            <div class="d-flex justify-content-between">
+                <span class="text-muted small">${formatDateTime(msg.timestamp)}</span>
+                <span class="badge ${msg.level === 'error' ? 'bg-danger' : 'bg-info'}">${msg.level}</span>
+            </div>
+            <div class="message-content">${msg.message}</div>
+        `;
+        messageList.appendChild(messageItem);
+    });
+}
+
+// Update software
+function updateSoftware() {
+    const updateError = document.getElementById('updateError');
+    
+    // Clear previous error message
+    if (updateError) {
+        updateError.style.display = 'none';
+        updateError.textContent = '';
+    }
+
+    // 1. ロボットの選択確認
+    if (selectedRobots.size === 0) {
+        if (updateError) {
+            updateError.textContent = 'Please select at least one robot.';
+            updateError.style.display = 'block';
+        }
+        return;
+    }
+
+    // 2. イメージの選択確認
+    const selectedImages = [];
+    document.querySelectorAll('.version-item').forEach(item => {
+        const checkbox = item.querySelector('input[type="checkbox"]');
+        if (checkbox && checkbox.checked) {
+            selectedImages.push(checkbox.value);
+        }
+    });
+
+    if (selectedImages.length === 0) {
+        if (updateError) {
+            updateError.textContent = 'Please select at least one Docker image.';
+            updateError.style.display = 'block';
+        }
+        return;
+    }
+
+    // 3. タグの選択確認とバージョン情報の収集
+    const selectedVersions = [];
+    let missingTags = false;
+
+    selectedImages.forEach(imageId => {
+        const select = document.querySelector(`#${imageId}-version`);
+        if (select && select.value) {
+            selectedVersions.push({
+                image_id: imageId,
+                tag: select.value
+            });
+        } else {
+            missingTags = true;
+        }
+    });
+
+    if (missingTags) {
+        if (updateError) {
+            updateError.textContent = 'Please ensure all selected images have tags selected.';
+            updateError.style.display = 'block';
+        }
+        return;
+    }
+
+    // 4. ダイアログの表示
+    showUpdateConfirmDialog(selectedRobots, selectedVersions);
+}
+
+// Show update confirmation dialog
+function showUpdateConfirmDialog(robots, versions) {
+    const dialog = document.getElementById('confirmDialog');
+    const selectedRobotsList = document.getElementById('selectedRobots');
+    const confirmButton = document.getElementById('confirmAction');
+    const dialogTitle = document.getElementById('dialogTitle');
+    const dialogOverlay = document.getElementById('dialogOverlay');
+    
+    if (!dialog || !selectedRobotsList || !confirmButton || !dialogTitle || !dialogOverlay) {
+        console.error('Dialog elements not found');
+        return;
+    }
+    
+    // Update dialog content
+    let content = '<h6>Selected Robots:</h6>';
+    content += Array.from(robots).map(robotId => `<li>${robotId}</li>`).join('');
+    content += '<h6 class="mt-3">Selected Images:</h6>';
+    content += versions.map(v => {
+        const nameText = document.querySelector(`#version-${v.image_id} .version-name-text`);
+        const imageName = nameText ? nameText.textContent.trim() : v.image_id;
+        return `<li>${imageName}: ${v.tag}</li>`;
+    }).join('');
+    selectedRobotsList.innerHTML = content;
+    
+    // Set current action and versions
+    currentAction = 'software_update';
+    currentVersions = versions;
+    
+    // Update dialog title and button
+    dialogTitle.textContent = 'Confirm Software Update';
+    confirmButton.textContent = 'Update Software';
+    
+    // Show overlay and dialog
+    dialogOverlay.style.display = 'flex';
+    
+    // Clear any previous error messages
+    const errorDiv = document.getElementById('dialogError');
+    if (errorDiv) {
+        errorDiv.style.display = 'none';
+        errorDiv.textContent = '';
+    }
+}
+
+// Handle software update response
+function handleSoftwareUpdateResponse(data) {
+    const { status, message } = data;
+    const updateError = document.getElementById('updateError');
+    
+    if (status === 'error' && updateError) {
+        updateError.textContent = message || 'Failed to update software';
+        updateError.style.display = 'block';
+    } else if (status === 'success') {
+        // Clear error message on success
+        if (updateError) {
+            updateError.style.display = 'none';
+            updateError.textContent = '';
+        }
+    }
 }

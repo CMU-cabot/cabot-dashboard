@@ -4,6 +4,7 @@ from app.utils.logger import logger
 from app.config import settings
 from app.services.websocket import manager as websocket_manager
 import asyncio
+import json
 
 class RobotStateManager:
     _instance = None
@@ -33,10 +34,13 @@ class RobotStateManager:
     async def _notify_state_change(self):
         """Notify all connected dashboard clients about state changes"""
         try:
-            await websocket_manager.broadcast({
+            message = {
+                "type": "robot_state",
                 "cabots": self.get_connected_cabots_list(),
                 "messages": self.messages
-            })
+            }
+            logger.debug(f"Broadcasting state change: {json.dumps(message, indent=2)}")
+            await websocket_manager.broadcast(message)
         except Exception as e:
             logger.error(f"Error broadcasting state change: {e}")
 
@@ -138,10 +142,20 @@ class RobotStateManager:
 
     def add_message(self, client_id: str, message: str):
         timestamp = datetime.now().isoformat()
+        
+        level = "info"
+        if "Error" in message or "failed" in message:
+            level = "error"
+        elif "completed successfully" in message:
+            level = "success"
+        elif "Executing" in message or "Starting" in message:
+            level = "info"
+        
         new_message = {
             "timestamp": timestamp,
             "client_id": client_id,
-            "message": message
+            "message": message,
+            "level": level
         }
         self.messages.append(new_message)
         if len(self.messages) > self.MAX_MESSAGES:
