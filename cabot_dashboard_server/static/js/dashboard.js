@@ -4,6 +4,7 @@ let isConnected = false;
 let selectedRobots = new Set();
 let currentFilter = 'all';
 let robotStateManager = null;
+let totalRobots = 0;  // Add total robots counter
 
 // Dialog related variables
 let currentAction = null;
@@ -14,13 +15,11 @@ function initWebSocket() {
     ws = new WebSocket(`ws://${window.location.host}/ws`);
     
     ws.onopen = () => {
-        console.log('WebSocket connected');
         isConnected = true;
         updateConnectionStatus();
     };
     
     ws.onclose = () => {
-        console.log('WebSocket disconnected');
         isConnected = false;
         updateConnectionStatus();
         setTimeout(initWebSocket, 5000);
@@ -29,38 +28,28 @@ function initWebSocket() {
     ws.onmessage = (event) => {
         try {
             const data = JSON.parse(event.data);
-            console.log('WebSocket received data:', data);
 
             switch (data.type) {
                 case 'robot_state':
-                    console.log('Received robot state update:', data);
                     if (data.cabots) {
-                        console.log('Updating dashboard with cabots:', data.cabots);
                         updateDashboard(data);
                     }
                     if (data.messages) {
-                        console.log('Updating message list:', data.messages);
                         updateMessageList(data.messages);
                     }
                     break;
                 case 'refresh_tags_response':
-                    console.log('Received tags refresh response:', data);
                     handleTagsResponse(data);
                     break;
                 case 'update_image_name_response':
-                    console.log('Received image name update response:', data);
                     handleImageNameResponse(data);
                     break;
                 case 'update_software_response':
-                    console.log('Received software update response:', data);
                     handleSoftwareUpdateResponse(data);
                     break;
-                default:
-                    console.log('Unknown message type:', data.type);
             }
         } catch (error) {
             console.error('WebSocket message processing error:', error);
-            console.log('Raw event data:', event.data);
         }
     };
 }
@@ -136,30 +125,16 @@ async function executeAction() {
                 let commandOption = null;
 
                 if (currentAction === 'software_update') {
-                    // ソフトウェアアップデートの場合、選択されたバージョン情報を収集
                     const selectedImages = [];
-                    console.log('Checking version items...');
-                    
-                    // バージョン項目を直接取得
                     const versionItems = document.querySelectorAll('.version-item');
-                    console.log('Found version items:', versionItems.length);
                     
                     versionItems.forEach(item => {
                         const checkbox = item.querySelector('input[type="checkbox"].version-checkbox');
-                        console.log('Found checkbox:', checkbox);
-                        console.log('Checkbox checked:', checkbox?.checked);
                         
                         if (checkbox && checkbox.checked) {
                             const imageId = checkbox.id.replace('-checkbox', '');
-                            console.log('Processing checked image ID:', imageId);
-                            
                             const select = document.getElementById(`${imageId}-version`);
                             const nameText = item.querySelector('.version-name-text');
-                            
-                            console.log('Select element:', select);
-                            console.log('Name text element:', nameText);
-                            console.log('Select value:', select?.value);
-                            console.log('Name text content:', nameText?.textContent);
                             
                             if (select && nameText && nameText.textContent && 
                                 nameText.textContent !== '+ Click here to set Docker image name') {
@@ -167,18 +142,15 @@ async function executeAction() {
                                     name: nameText.textContent.trim(),
                                     version: select.value
                                 };
-                                console.log('Adding image info:', imageInfo);
                                 selectedImages.push(imageInfo);
                             }
                         }
                     });
                     
-                    console.log('Selected images array:', selectedImages);
                     if (selectedImages.length > 0) {
                         commandOption = {
                             images: selectedImages
                         };
-                        console.log('Final commandOption:', commandOption);
                     }
                 }
 
@@ -189,7 +161,6 @@ async function executeAction() {
                     commandOption: commandOption || {}
                 };
 
-                console.log('Final message to send:', JSON.stringify(message, null, 2));
                 ws.send(JSON.stringify(message));
                 resolve();
             });
@@ -237,7 +208,6 @@ function updateDashboard(data) {
         actionError.textContent = '';
     }
     
-    console.log('Updating dashboard with data:', data);
     const robotList = document.querySelector('.robot-list');
     if (!robotList) {
         console.error('Robot list container not found');
@@ -250,62 +220,57 @@ function updateDashboard(data) {
         return;
     }
 
+    // Update total robots count
+    totalRobots = data.cabots.length;
+
     // Filter and display robots
-    const filteredRobots = data.cabots
-        .filter(robot => {
-            switch (currentFilter) {
-                case 'warnings':
-                    return robot.warnings && robot.warnings.length > 0;
-                case 'disconnected':
-                    return !robot.connected;
-                default:
-                    return true;
-            }
-        });
-
-    filteredRobots.forEach(robot => {
-        const robotCard = document.createElement('div');
-        robotCard.className = 'robot-card mb-3';
-        robotCard.innerHTML = `
-            <div class="d-flex justify-content-between align-items-center mb-2">
-                <div class="form-check">
-                    <input class="form-check-input robot-checkbox" type="checkbox" value="${robot.id}"
-                        ${selectedRobots.has(robot.id) ? 'checked' : ''}
-                        ${!robot.connected ? 'disabled' : ''}>
-                    <label class="form-check-label fw-bold">${robot.id}</label>
+    data.cabots.forEach(robot => {
+        if (currentFilter === 'all' ||
+            (currentFilter === 'connected' && robot.connected) ||
+            (currentFilter === 'disconnected' && !robot.connected)) {
+            
+            const robotCard = document.createElement('div');
+            robotCard.className = 'robot-card mb-3';
+            robotCard.innerHTML = `
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <div class="form-check">
+                        <input class="form-check-input robot-checkbox" type="checkbox" value="${robot.id}"
+                               ${selectedRobots.has(robot.id) ? 'checked' : ''}
+                               ${!robot.connected ? 'disabled' : ''}>
+                        <label class="form-check-label fw-bold">${robot.id}</label>
+                    </div>
+                    <div>
+                        <span class="badge ${robot.connected ? 'bg-success' : 'bg-danger'} me-1">
+                            ${robot.connected ? 'Connected' : 'Disconnected'}
+                        </span>
+                        <span class="badge bg-primary">Running</span>
+                    </div>
                 </div>
-                <div>
-                    <span class="badge ${robot.connected ? 'bg-success' : 'bg-danger'} me-1">
-                        ${robot.connected ? 'Connected' : 'Disconnected'}
-                    </span>
-                    <span class="badge ${robot.system_status === 'active' ? 'bg-primary' : 'bg-warning'}">
-                        ${robot.system_status}
-                    </span>
+                <div class="robot-info">
+                    <p class="text-muted mb-2">Last Poll: ${formatDateTime(robot.last_poll)}</p>
+                    <p class="mb-2">System operational</p>
+                    <div class="d-flex justify-content-between">
+                        <span class="version-tag">docker: ${robot.docker_version || 'N/A'}</span>
+                        <span class="version-tag">sites: ${robot.sites_version || 'N/A'}</span>
+                        <span class="version-tag">map: ${robot.map_version || 'N/A'}</span>
+                    </div>
                 </div>
-            </div>
-            <div class="robot-info">
-                <p class="text-muted mb-2">Last Poll: ${formatDateTime(robot.last_poll)}</p>
-                <p class="mb-2">${robot.message || '---'}</p>
-                <div class="d-flex justify-content-between">
-                    <span class="version-tag">docker: ${robot.docker_version || 'N/A'}</span>
-                    <span class="version-tag">sites: ${robot.sites_version || 'N/A'}</span>
-                    <span class="version-tag">map: ${robot.map_version || 'N/A'}</span>
-                </div>
-            </div>
-        `;
+            `;
 
-        const checkbox = robotCard.querySelector('.robot-checkbox');
-        checkbox.addEventListener('change', (e) => {
-            if (e.target.checked) {
-                selectedRobots.add(robot.id);
-            } else {
-                selectedRobots.delete(robot.id);
-            }
-            updateSelectedCount();
-            updateSelectAllCheckbox();
-        });
+            // Add event listener for checkbox
+            const checkbox = robotCard.querySelector('.robot-checkbox');
+            checkbox.addEventListener('change', (e) => {
+                if (e.target.checked) {
+                    selectedRobots.add(robot.id);
+                } else {
+                    selectedRobots.delete(robot.id);
+                }
+                updateSelectAllCheckbox();
+                updateSelectedCount();
+            });
 
-        robotList.appendChild(robotCard);
+            robotList.appendChild(robotCard);
+        }
     });
 
     updateSelectedCount();
@@ -317,9 +282,9 @@ function formatDateTime(dateTimeString) {
     if (!dateTimeString) return 'Unknown';
     
     try {
-        // UTCの文字列をDateオブジェクトに変換し、JSTで表示
-        const date = new Date(dateTimeString + 'Z');  // 'Z'を追加してUTCとして解釈
-        return date.toLocaleString('ja-JP', { 
+        // Convert UTC string to Date object and display in JST
+        const date = new Date(dateTimeString + 'Z');
+        return date.toLocaleString('en-US', { 
             timeZone: 'Asia/Tokyo',
             year: 'numeric',
             month: '2-digit',
@@ -331,7 +296,7 @@ function formatDateTime(dateTimeString) {
         }).replace(/\//g, '/');
     } catch (error) {
         console.error('Error formatting date:', error);
-        return dateTimeString;  // エラーの場合は元の文字列を返す
+        return dateTimeString;  // Return original string on error
     }
 }
 
@@ -368,7 +333,6 @@ function handleTagsResponse(data) {
             select.appendChild(option);
         });
 
-        // タグが取得できた場合、チェックボックスを有効化
         if (data.tags.length > 0 && checkbox) {
             checkbox.disabled = false;
         }
@@ -446,9 +410,6 @@ function handleImageNameResponse(data) {
 
 // Initialize the dashboard
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('Initializing dashboard...');
-    
-    // Initialize RobotStateManager if available
     if (window.RobotStateManager) {
         robotStateManager = new window.RobotStateManager();
     }
@@ -631,19 +592,12 @@ async function finishEdit(input) {
     }
 
     try {
-        console.log('Sending update_image_name message:', {
-            type: 'update_image_name',
-            image_id: imageId,
-            image_name: newName
-        });
-
         ws.send(JSON.stringify({
             type: 'update_image_name',
             image_id: imageId,
             image_name: newName
         }));
 
-        // 一時的に表示を更新（レスポンスで確定または元に戻す）
         textElement.textContent = newName;
         textElement.classList.remove('empty-name');
         updateImageControls(imageId, true);
@@ -665,11 +619,6 @@ async function finishEdit(input) {
 // Refresh tags for a robot
 async function refreshTags(imageId) {
     try {
-        console.log('Sending refresh_tags message:', {
-            type: 'refresh_tags',
-            image_id: imageId
-        });
-
         ws.send(JSON.stringify({
             type: 'refresh_tags',
             image_id: imageId
@@ -721,7 +670,8 @@ function updateSelectAllCheckbox() {
 function updateSelectedCount() {
     const selectedCount = document.querySelector('.selected-count');
     if (selectedCount) {
-        selectedCount.textContent = `(${selectedRobots.size}/5)`;
+        const visibleRobots = document.querySelectorAll('.robot-card').length;
+        selectedCount.textContent = `(${selectedRobots.size}/${visibleRobots})`;
     }
 }
 
@@ -761,7 +711,7 @@ function updateSoftware() {
         updateError.textContent = '';
     }
 
-    // 1. ロボットの選択確認
+    // 1. Check robot selection
     if (selectedRobots.size === 0) {
         if (updateError) {
             updateError.textContent = 'Please select at least one robot.';
@@ -770,7 +720,7 @@ function updateSoftware() {
         return;
     }
 
-    // 2. イメージの選択確認
+    // 2. Check image selection
     const selectedImages = [];
     document.querySelectorAll('.version-item').forEach(item => {
         const checkbox = item.querySelector('input[type="checkbox"]');
@@ -787,7 +737,7 @@ function updateSoftware() {
         return;
     }
 
-    // 3. タグの選択確認とバージョン情報の収集
+    // 3. Check tag selection and collect version information
     const selectedVersions = [];
     let missingTags = false;
 
@@ -811,7 +761,7 @@ function updateSoftware() {
         return;
     }
 
-    // 4. ダイアログの表示
+    // 4. Show dialog
     showUpdateConfirmDialog(selectedRobots, selectedVersions);
 }
 
@@ -872,5 +822,22 @@ function handleSoftwareUpdateResponse(data) {
             updateError.style.display = 'none';
             updateError.textContent = '';
         }
+    }
+}
+
+// Filter robots
+function filterRobots(filter) {
+    currentFilter = filter;
+    const robotList = document.querySelector('.robot-list');
+    if (!robotList) return;
+
+    // Clear selected robots when filter changes
+    selectedRobots.clear();
+    updateSelectedCount();
+    updateSelectAllCheckbox();
+
+    // Request latest data
+    if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'refresh' }));
     }
 }

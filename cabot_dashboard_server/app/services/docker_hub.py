@@ -1,8 +1,10 @@
 import httpx
 import json
 from datetime import datetime
+import pytz
 from typing import Dict, List, Optional
 import logging
+from app.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -48,9 +50,12 @@ class DockerHubService:
             data = response.json()
             tags = [result["name"] for result in data["results"]]
             
+            tz = pytz.timezone(settings.timezone)
+            current_time = datetime.now(tz).strftime('%Y/%m/%d %H:%M:%S')
+            
             self._tags_cache[repository].update({
                 "tags": tags,
-                "last_updated": datetime.now().isoformat()
+                "last_updated": current_time
             })
             
             return tags
@@ -67,9 +72,12 @@ class DockerHubService:
         if repository not in self._tags_cache:
             return False
         
+        tz = pytz.timezone(settings.timezone)
+        current_time = datetime.now(tz).strftime('%Y/%m/%d %H:%M:%S')
+        
         self._tags_cache[repository].update({
             'name': name,
-            'last_updated': datetime.now().isoformat()
+            'last_updated': current_time
         })
         logger.debug(f"Updated image name for {repository}: {json.dumps(self._tags_cache[repository], indent=2)}")
         return True 

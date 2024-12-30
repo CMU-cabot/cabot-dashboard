@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pathlib import Path
@@ -7,6 +7,7 @@ from app.routers import client, dashboard, auth
 from app.config import settings
 from app.utils.logger import logger
 from app.services.robot_state import RobotStateManager
+from fastapi.middleware.cors import CORSMiddleware
 
 # Create FastAPI application
 app = FastAPI(
@@ -16,7 +17,27 @@ app = FastAPI(
 )
 
 root_dir = Path(__file__).parent.parent
-app.mount("/static", StaticFiles(directory=root_dir / "static"), name="static")
+app.mount("/static", StaticFiles(directory=root_dir / "static", html=True), name="static")
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origins,
+    allow_credentials=True,
+    allow_methods=settings.cors_methods,
+    allow_headers=settings.cors_headers,
+)
+
+# Add security headers middleware
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Content-Security-Policy"] = "upgrade-insecure-requests"
+    return response
+
 templates = Jinja2Templates(directory=root_dir / "templates")
 
 app.add_middleware(ErrorLoggingMiddleware)

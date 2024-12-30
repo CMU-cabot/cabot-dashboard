@@ -20,13 +20,15 @@ docker_hub_service = DockerHubService()
 async def dashboard_page(
     request: Request,
     session_token: str = Cookie(None),
-    auth_service: AuthService = Depends(get_auth_service)
+    auth_service: AuthService = Depends(get_auth_service),
+    robot_manager: RobotStateManager = Depends(get_robot_state_manager)
 ):
     try:
         if not session_token or not auth_service.validate_session(session_token, timeout=3600):
             return RedirectResponse(url="/login")
 
         docker_versions = docker_hub_service.get_all_cached_data()
+        robots = robot_manager.get_connected_cabots_list()
         return templates.TemplateResponse(
             "dashboard.html",
             {
@@ -35,7 +37,9 @@ async def dashboard_page(
                 "api_key": settings.api_key,
                 "debug_mode": settings.debug_mode,
                 "user": "user1",  # TODO: Temporary solution - needs to be replaced with proper user management
-                "docker_versions": docker_versions
+                "docker_versions": docker_versions,
+                "robots": robots,
+                "total_robots": len(robots)
             }
         )
     except ValueError:
