@@ -13,17 +13,19 @@ class RobotStateManager:
         if cls._instance is None:
             cls._instance = super(RobotStateManager, cls).__new__(cls)
             cls._instance.connected_cabots = {}
-            cls._instance.messages = []
+            cls._instance.messages = []  # Initialize messages list
             cls._instance.POLLING_TIMEOUT = settings.polling_timeout
-            cls._instance.MAX_MESSAGES = 1000  # Maximum number of messages to retain
+            cls._instance.MAX_MESSAGES = 100  # Maximum number of messages to retain per robot
+            cls._instance.DISPLAY_MESSAGES = 5  # Number of messages to display
         for cabot_id in settings.allowed_cabot_id_list:
             cls._instance.connected_cabots[cabot_id] = {
                 "id": cabot_id,
                 "status": "unknown",
                 "system_status": "unknown",
                 "last_poll": None,
-                "message": "",
-                "connected": False
+                "connected": False,
+                "images": {},
+                "messages": []  # List of messages for each robot
             }
         return cls._instance
 
@@ -46,22 +48,39 @@ class RobotStateManager:
 
     def update_robot_state(self, client_id: str, state: dict):
         logger.debug(f"Updating state for {client_id}: {state}")
-        self.connected_cabots[client_id] = {
+        # Get current state to preserve existing fields
+        current_state = self.connected_cabots.get(client_id, {})
+
+        # Update state while preserving messages and other fields
+        updated_state = {
             "id": client_id,
             "status": state.get("status", "unknown"),
             "system_status": state.get("system_status", "unknown"),
             "last_poll": datetime.now().isoformat(),
-            "message": state.get("message", "")
+            "connected": True if state.get("status") == "connected" else current_state.get("connected", False),
+            "images": current_state.get("images", {}),
+            "messages": current_state.get("messages", [])  # Preserve message history
         }
+
+        self.connected_cabots[client_id] = updated_state
         logger.debug(f"Updated connected_cabots: {self.connected_cabots}")
         asyncio.create_task(self._notify_state_change())
 
     def update_robot_polling(self, client_id: str):
         if client_id in self.connected_cabots:
-            self.connected_cabots[client_id].update({
+            current_state = self.connected_cabots[client_id]
+
+            # Create new state with all current values
+            updated_state = current_state.copy()
+            # Update only the polling-related fields
+            updated_state.update({
                 "status": "connected",
                 'last_poll': datetime.now().isoformat()
             })
+            
+            # Update the state atomically
+            self.connected_cabots[client_id] = updated_state
+
             asyncio.create_task(self._notify_state_change())
         else:
             logger.warning(f"Attempted to update status for unknown client: {client_id}")
@@ -69,23 +88,87 @@ class RobotStateManager:
 
     def update_robot_status(self, client_id: str, status: str):
         if client_id in self.connected_cabots:
-            self.connected_cabots[client_id].update({
-                'status': status
-            })
+            current_state = self.connected_cabots[client_id]
+
+            # Create new state with all current values
+            updated_state = current_state.copy()
+            # Update only the status
+            updated_state['status'] = status
+
+            # Update the state atomically
+            self.connected_cabots[client_id] = updated_state
+            
             asyncio.create_task(self._notify_state_change())
         else:
             logger.warning(f"Attempted to update status for unknown client: {client_id}")
             raise ValueError(f"Client {client_id} not found")
 
-    def update_robot_message(self, client_id: str, message: str):
+    @classmethod
+    def update_robot_message(cls, cabot_id: str, message: str, level: str = "info"):
+        """Update robot message with timestamp"""
+        if not cls._instance:
+            return
+
+        if cabot_id not in cls._instance.connected_cabots:
+            cls._instance.connected_cabots[cabot_id] = {
+                "id": cabot_id,
+                "status": "unknown",
+                "system_status": "unknown",
+                "last_poll": None,
+                "connected": False,
+                "images": {},
+                "messages": []
+            }
+
+        # Add new message with timestamp
+        new_message = {
+            "message": message,
+            "level": level,
+            "timestamp": datetime.now().isoformat()
+        }
+
+        # Add to messages list and keep only the latest 100 messages
+        robot = cls._instance.connected_cabots[cabot_id]
+        robot["messages"].append(new_message)
+        if len(robot["messages"]) > 100:
+            robot["messages"] = robot["messages"][-100:]
+
+    def update_robot_images(self, client_id: str, images: Dict[str, str]):
+        """Update image tags for a robot
+        Args:
+            client_id (str): Robot ID
+            images (Dict[str, str]): Dictionary of image name to tag mapping
+        """
         if client_id in self.connected_cabots:
-            self.connected_cabots[client_id].update({
-                'message': message
-            })
-            self.add_message(client_id, message)
+            logger.info(f"Updating images for {client_id}: {images}")
+            # Get current state to preserve all fields
+            current_state = self.connected_cabots[client_id]
+
+            # Create new state with all current values
+            updated_state = current_state.copy()
+            # Update only the images
+            updated_state['images'] = images
+
+            # Update the state atomically
+            self.connected_cabots[client_id] = updated_state
+
+            # Ensure the state change is broadcast
             asyncio.create_task(self._notify_state_change())
         else:
-            logger.warning(f"Attempted to update message for unknown client: {client_id}")
+            logger.warning(f"Attempted to update images for unknown client: {client_id}")
+            raise ValueError(f"Client {client_id} not found")
+
+    def get_robot_images(self, client_id: str) -> Dict[str, str]:
+        """Get image tags for a robot
+        Args:
+            client_id (str): Robot ID
+        Returns:
+            Dict[str, str]: Dictionary of image name to tag mapping
+        """
+        if client_id in self.connected_cabots:
+            return self.connected_cabots[client_id].get('images', {})
+        else:
+            logger.warning(f"Attempted to get images for unknown client: {client_id}")
             raise ValueError(f"Client {client_id} not found")
 
     def get_connected_cabots_list(self) -> list:
@@ -106,27 +189,53 @@ class RobotStateManager:
                     time_since_last_poll = None
                     is_connected = False
 
-                cabot_list.append({
+                # Get only the latest messages within 5 minutes
+                messages = []
+                for msg in robot_info.get('messages', []):
+                    try:
+                        msg_time = datetime.fromisoformat(msg['timestamp'])
+                        if (current_time - msg_time).total_seconds() <= 300:  # 5 minutes = 300 seconds
+                            messages.append(msg)
+                    except Exception as e:
+                        logger.error(f"Error processing message timestamp: {e}")
+
+                # Sort messages by timestamp in descending order
+                messages = sorted(messages, key=lambda x: x['timestamp'], reverse=True)
+
+                # Limit to DISPLAY_MESSAGES
+                messages = messages[:self.DISPLAY_MESSAGES]
+
+                robot_data = {
                     'id': robot_id,
+                    'name': robot_id,
                     'status': robot_info.get('status', 'unknown'),
                     'system_status': robot_info.get('system_status', 'unknown'),
                     'last_poll': robot_info.get('last_poll'),
-                    'message': robot_info.get('message', ''),
+                    'messages': messages,
                     'connected': is_connected,
                     'time_since_last_poll': time_since_last_poll,
-                    'polling_timeout': self.POLLING_TIMEOUT
-                })
+                    'polling_timeout': self.POLLING_TIMEOUT,
+                    'images': robot_info.get('images', {})
+                }
+
+                # Update connected status in robot_info for future reference
+                robot_info['connected'] = is_connected
+
+                cabot_list.append(robot_data)
                 logger.debug(f"Added robot {robot_id} to list. Connected: {is_connected}, "
                            f"Last poll: {time_since_last_poll}s ago (timeout: {self.POLLING_TIMEOUT}s)")
             except Exception as e:
                 logger.error(f"Error processing robot {robot_id}: {e}")
                 cabot_list.append({
                     'id': robot_id,
+                    'name': robot_id,
                     'status': 'error',
                     'system_status': 'unknown',
                     'message': str(e),
                     'connected': False,
-                    'polling_timeout': self.POLLING_TIMEOUT
+                    'polling_timeout': self.POLLING_TIMEOUT,
+                    'images': {},
+                    'messages': []
                 })
         logger.debug(f"Returning all cabots: {cabot_list}")
         return cabot_list
@@ -140,16 +249,8 @@ class RobotStateManager:
         })
         asyncio.create_task(self._notify_state_change())
 
-    def add_message(self, client_id: str, message: str):
+    def add_message(self, client_id: str, message: str, level: str = "info"):
         timestamp = datetime.now().isoformat()
-        
-        level = "info"
-        if "Error" in message or "failed" in message:
-            level = "error"
-        elif "completed successfully" in message:
-            level = "success"
-        elif "Executing" in message or "Starting" in message:
-            level = "info"
         
         new_message = {
             "timestamp": timestamp,
@@ -162,5 +263,26 @@ class RobotStateManager:
             self.messages = self.messages[-self.MAX_MESSAGES:]
         asyncio.create_task(self._notify_state_change())
 
-    def get_messages(self, limit: int = 100) -> list:
-        return self.messages[-limit:]
+    def get_messages(self, limit: int = 5) -> list:
+        """Get latest messages
+        Args:
+            limit (int): Number of messages to return (default: 5)
+        Returns:
+            list: List of messages, newest first
+        """
+        return sorted(self.messages[-limit:], key=lambda x: x['timestamp'], reverse=True)
+
+    @classmethod
+    def get_robot_state(cls, cabot_id: str) -> dict:
+        """Get robot state including latest messages"""
+        if not cls._instance or cabot_id not in cls._instance.connected_cabots:
+            return None
+
+        robot_state = cls._instance.connected_cabots[cabot_id].copy()
+        # Sort messages by timestamp in descending order
+        robot_state["messages"] = sorted(
+            robot_state["messages"],
+            key=lambda x: x["timestamp"],
+            reverse=True
+        )
+        return robot_state

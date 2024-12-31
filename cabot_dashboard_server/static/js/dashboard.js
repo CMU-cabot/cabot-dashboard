@@ -81,8 +81,23 @@ function showConfirmDialog(command) {
         return;
     }
     
+    // Get only enabled robots
+    const enabledRobots = Array.from(selectedRobots).filter(robotId => {
+        const checkbox = document.querySelector(`.robot-checkbox[value="${robotId}"]`);
+        return checkbox && !checkbox.disabled;
+    });
+
+    if (enabledRobots.length === 0) {
+        const actionError = document.getElementById('actionError');
+        if (actionError) {
+            actionError.textContent = 'No enabled robots selected.';
+            actionError.style.display = 'block';
+        }
+        return;
+    }
+    
     // Update dialog content
-    selectedRobotsList.innerHTML = Array.from(selectedRobots)
+    selectedRobotsList.innerHTML = enabledRobots
         .map(robotId => `<li>${robotId}</li>`)
         .join('');
     
@@ -119,7 +134,17 @@ async function executeAction() {
     if (!currentAction || selectedRobots.size === 0) return;
 
     try {
-        const promises = Array.from(selectedRobots).map(robotId => {
+        // Get only enabled robots
+        const enabledRobots = Array.from(selectedRobots).filter(robotId => {
+            const checkbox = document.querySelector(`.robot-checkbox[value="${robotId}"]`);
+            return checkbox && !checkbox.disabled;
+        });
+
+        if (enabledRobots.length === 0) {
+            throw new Error('No enabled robots selected');
+        }
+
+        const promises = enabledRobots.map(robotId => {
             return new Promise((resolve, reject) => {
                 let commandData = currentAction;
                 let commandOption = null;
@@ -131,7 +156,7 @@ async function executeAction() {
                     versionItems.forEach(item => {
                         const checkbox = item.querySelector('input[type="checkbox"].version-checkbox');
                         
-                        if (checkbox && checkbox.checked) {
+                        if (checkbox && checkbox.checked && !checkbox.disabled) {
                             const imageId = checkbox.id.replace('-checkbox', '');
                             const select = document.getElementById(`${imageId}-version`);
                             const nameText = item.querySelector('.version-name-text');
@@ -232,28 +257,45 @@ function updateDashboard(data) {
             const robotCard = document.createElement('div');
             robotCard.className = 'robot-card mb-3';
             robotCard.innerHTML = `
-                <div class="d-flex justify-content-between align-items-center mb-2">
+                <div class="d-flex justify-content-between align-items-start mb-2">
                     <div class="form-check">
                         <input class="form-check-input robot-checkbox" type="checkbox" value="${robot.id}"
                                ${selectedRobots.has(robot.id) ? 'checked' : ''}
                                ${!robot.connected ? 'disabled' : ''}>
-                        <label class="form-check-label fw-bold">${robot.id}</label>
+                        <label class="form-check-label fw-bold">${robot.name || robot.id}</label>
                     </div>
-                    <div>
-                        <span class="badge ${robot.connected ? 'bg-success' : 'bg-danger'} me-1">
-                            ${robot.connected ? 'Connected' : 'Disconnected'}
-                        </span>
-                        <span class="badge bg-primary">Running</span>
+                    <div class="text-end">
+                        <div>
+                            <span class="badge ${robot.connected ? 'bg-success' : 'bg-danger'} me-1">
+                                ${robot.connected ? 'Connected' : 'Disconnected'}
+                            </span>
+                            <span class="badge bg-primary">Running</span>
+                        </div>
+                        <div class="text-muted small mt-1">Last Poll: ${formatDateTime(robot.last_poll)}</div>
                     </div>
                 </div>
+                ${Object.keys(robot.images || {}).length > 0 ? `
+                <div class="image-versions mb-2">
+                    ${Object.entries(robot.images || {}).map(([name, tag]) => 
+                        `<div class="version-tag">${name}: ${tag}</div>`
+                    ).join('')}
+                </div>
+                ` : robot.connected ? `
+                <div class="alert alert-info py-1 px-3 mb-2">
+                    <i class="bi bi-info-circle me-2"></i>Please execute "Get Image Tags" to retrieve the current software versions.
+                </div>
+                ` : ''}
                 <div class="robot-info">
-                    <p class="text-muted mb-2">Last Poll: ${formatDateTime(robot.last_poll)}</p>
-                    <p class="mb-2">System operational</p>
-                    <div class="d-flex justify-content-between">
-                        <span class="version-tag">docker: ${robot.docker_version || 'N/A'}</span>
-                        <span class="version-tag">sites: ${robot.sites_version || 'N/A'}</span>
-                        <span class="version-tag">map: ${robot.map_version || 'N/A'}</span>
+                    ${robot.messages && robot.messages.length > 0 ? `
+                    <div class="message-area mb-2">
+                        ${robot.messages.slice(0, 5).map(msg => `
+                            <div class="alert ${msg.level === 'error' ? 'alert-danger' : msg.level === 'success' ? 'alert-success' : 'alert-info'} py-0 px-3 mb-0">
+                                <span class="text-muted me-2" style="font-size: 0.9em;">${formatDateTime(msg.timestamp).split(' ')[1]}</span>
+                                ${msg.message}
+                            </div>
+                        `).join('')}
                     </div>
+                    ` : ''}
                 </div>
             `;
 
@@ -499,6 +541,26 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
     });
+
+    // Add CSS for image versions
+    const style = document.createElement('style');
+    style.textContent = `
+        .image-versions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            margin-left: 1.5rem;
+        }
+        .version-tag {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 3px 8px;
+            font-size: 1.125rem;
+            color: #495057;
+        }
+    `;
+    document.head.appendChild(style);
 });
 
 // Update image controls visibility and state
@@ -711,10 +773,16 @@ function updateSoftware() {
         updateError.textContent = '';
     }
 
+    // Get only enabled robots
+    const enabledRobots = Array.from(selectedRobots).filter(robotId => {
+        const checkbox = document.querySelector(`.robot-checkbox[value="${robotId}"]`);
+        return checkbox && !checkbox.disabled;
+    });
+
     // 1. Check robot selection
-    if (selectedRobots.size === 0) {
+    if (enabledRobots.length === 0) {
         if (updateError) {
-            updateError.textContent = 'Please select at least one robot.';
+            updateError.textContent = 'Please select at least one enabled robot.';
             updateError.style.display = 'block';
         }
         return;
@@ -724,14 +792,14 @@ function updateSoftware() {
     const selectedImages = [];
     document.querySelectorAll('.version-item').forEach(item => {
         const checkbox = item.querySelector('input[type="checkbox"]');
-        if (checkbox && checkbox.checked) {
+        if (checkbox && checkbox.checked && !checkbox.disabled) {
             selectedImages.push(checkbox.value);
         }
     });
 
     if (selectedImages.length === 0) {
         if (updateError) {
-            updateError.textContent = 'Please select at least one Docker image.';
+            updateError.textContent = 'Please select at least one enabled Docker image.';
             updateError.style.display = 'block';
         }
         return;
@@ -762,7 +830,7 @@ function updateSoftware() {
     }
 
     // 4. Show dialog
-    showUpdateConfirmDialog(selectedRobots, selectedVersions);
+    showUpdateConfirmDialog(new Set(enabledRobots), selectedVersions);
 }
 
 // Show update confirmation dialog
@@ -779,7 +847,7 @@ function showUpdateConfirmDialog(robots, versions) {
     }
     
     // Update dialog content
-    let content = '<h6>Selected Robots:</h6>';
+    let content = '<h6>Selected AI Suitcases:</h6>';
     content += Array.from(robots).map(robotId => `<li>${robotId}</li>`).join('');
     content += '<h6 class="mt-3">Selected Images:</h6>';
     content += versions.map(v => {
