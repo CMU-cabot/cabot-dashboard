@@ -57,14 +57,33 @@ function initWebSocket() {
 // Update connection status display
 function updateConnectionStatus() {
     const statusBadge = document.querySelector('.navbar .badge');
+    const actionButtons = document.querySelectorAll('.btn-success, .btn-warning, .btn-primary, .btn-danger, .btn-info');
+    const updateSoftwareBtn = document.querySelector('.btn[onclick="updateSoftware()"]');
+    
     if (isConnected) {
         statusBadge.classList.remove('bg-danger');
         statusBadge.classList.add('bg-success');
         statusBadge.textContent = 'Connected';
+        
+        // Enable all action buttons
+        actionButtons.forEach(btn => {
+            btn.disabled = false;
+        });
+        if (updateSoftwareBtn) {
+            updateSoftwareBtn.disabled = false;
+        }
     } else {
         statusBadge.classList.remove('bg-success');
         statusBadge.classList.add('bg-danger');
         statusBadge.textContent = 'Disconnected';
+        
+        // Disable all action buttons
+        actionButtons.forEach(btn => {
+            btn.disabled = true;
+        });
+        if (updateSoftwareBtn) {
+            updateSoftwareBtn.disabled = true;
+        }
     }
 }
 
@@ -269,7 +288,13 @@ function updateDashboard(data) {
                             <span class="badge ${robot.connected ? 'bg-success' : 'bg-danger'} me-1">
                                 ${robot.connected ? 'Connected' : 'Disconnected'}
                             </span>
-                            <span class="badge bg-primary">Running</span>
+                            <span class="badge ${robot.system_status === 'active' ? 'bg-primary' : 
+                                               robot.system_status === 'failed' ? 'bg-danger' : 
+                                               robot.system_status === 'inactive' ? 'bg-warning' : 
+                                               robot.system_status === 'deactivating' ? 'bg-info' : 
+                                               'bg-secondary'}">
+                                ${robot.system_status ? robot.system_status.charAt(0).toUpperCase() + robot.system_status.slice(1) : 'Unknown'}
+                            </span>
                         </div>
                         <div class="text-muted small mt-1">Last Poll: ${formatDateTime(robot.last_poll)}</div>
                     </div>
@@ -288,12 +313,25 @@ function updateDashboard(data) {
                 <div class="robot-info">
                     ${robot.messages && robot.messages.length > 0 ? `
                     <div class="message-area mb-2">
-                        ${robot.messages.slice(0, 5).map(msg => `
-                            <div class="alert ${msg.level === 'error' ? 'alert-danger' : msg.level === 'success' ? 'alert-success' : 'alert-info'} py-0 px-3 mb-0">
-                                <span class="text-muted me-2" style="font-size: 0.9em;">${formatDateTime(msg.timestamp).split(' ')[1]}</span>
+                        ${robot.messages.map(msg => `
+                            <div class="alert ${msg.level === 'error' ? 'alert-danger' : 
+                                               msg.level === 'success' ? 'alert-success' : 
+                                               'alert-info'} py-0 px-3 mb-1">
+                                <span class="text-muted me-2" style="font-size: 0.9em;">
+                                    ${formatDateTime(msg.timestamp).split(' ')[1]}
+                                </span>
                                 ${msg.message}
                             </div>
                         `).join('')}
+                    </div>
+                    ` : ''}
+                    ${robot.all_messages && robot.all_messages.length > 0 ? `
+                    <div class="text-end mt-2">
+                        <button class="btn btn-sm btn-outline-secondary view-history-btn" 
+                                data-robot-id="${robot.id}"
+                                data-messages='${JSON.stringify(robot.all_messages).replace(/'/g, "&#39;")}'>
+                            <i class="bi bi-clock-history"></i> View History
+                        </button>
                     </div>
                     ` : ''}
                 </div>
@@ -465,6 +503,16 @@ document.addEventListener('DOMContentLoaded', () => {
             toggleAllRobots(e.target.checked);
         });
     }
+
+    // Add event listener for view history buttons
+    document.addEventListener('click', (e) => {
+        if (e.target.closest('.view-history-btn')) {
+            const button = e.target.closest('.view-history-btn');
+            const robotId = button.dataset.robotId;
+            const messages = JSON.parse(button.dataset.messages);
+            showLogDialog(robotId, messages);
+        }
+    });
     
     // Add dialog event handlers
     const confirmButton = document.getElementById('confirmAction');
@@ -908,4 +956,99 @@ function filterRobots(filter) {
     if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: 'refresh' }));
     }
+}
+
+// Show log dialog
+function showLogDialog(robotId, allMessages) {
+    const dialog = document.getElementById('logDialog');
+    const content = document.getElementById('logContent');
+    if (!dialog || !content) return;
+
+    // Clear previous content
+    content.innerHTML = '';
+
+    // Sort messages by timestamp in descending order
+    const sortedMessages = allMessages.sort((a, b) => {
+        return new Date(b.timestamp) - new Date(a.timestamp);
+    });
+
+    // Add all messages to dialog
+    sortedMessages.forEach(msg => {
+        const entry = document.createElement('div');
+        entry.className = 'log-entry mb-2';
+        entry.innerHTML = `
+            <div class="d-flex">
+                <span class="log-timestamp me-3">${formatDateTime(msg.timestamp)}</span>
+                <div class="log-message ${msg.level === 'error' ? 'text-danger' : 
+                                       msg.level === 'success' ? 'text-success' : 
+                                       'text-dark'}">${msg.message}</div>
+            </div>
+        `;
+        content.appendChild(entry);
+    });
+
+    // Show dialog
+    dialog.style.display = 'flex';
+
+    // Add escape key handler
+    document.addEventListener('keydown', handleLogDialogEscape);
+}
+
+// Close log dialog
+function closeLogDialog() {
+    const dialog = document.getElementById('logDialog');
+    if (dialog) {
+        dialog.style.display = 'none';
+    }
+    document.removeEventListener('keydown', handleLogDialogEscape);
+}
+
+// Handle escape key for log dialog
+function handleLogDialogEscape(event) {
+    if (event.key === 'Escape') {
+        closeLogDialog();
+    }
+}
+
+// Find robot by ID
+function findRobotById(robotId) {
+    const robotCard = document.querySelector(`.robot-card input[value="${robotId}"]`);
+    if (!robotCard) return null;
+
+    const robotData = {
+        id: robotId,
+        messages: [],
+        all_messages: []
+    };
+
+    // Get messages from the robot card
+    const messageElements = robotCard.closest('.robot-card').querySelectorAll('.message-area .alert');
+    messageElements.forEach(msgElement => {
+        const timestampElement = msgElement.querySelector('.text-muted');
+        const timestamp = timestampElement.textContent.trim();
+        const message = msgElement.textContent.replace(timestampElement.textContent, '').trim();
+        let level = 'info';
+        if (msgElement.classList.contains('alert-danger')) level = 'error';
+        else if (msgElement.classList.contains('alert-success')) level = 'success';
+
+        robotData.messages.push({
+            timestamp: timestamp,
+            message: message,
+            level: level
+        });
+        robotData.all_messages.push({
+            timestamp: timestamp,
+            message: message,
+            level: level
+        });
+    });
+
+    return robotData;
+}
+
+// Show log dialog from button
+function showLogDialogFromButton(button) {
+    const robotId = button.dataset.robotId;
+    const messages = JSON.parse(button.dataset.messages);
+    showLogDialog(robotId, messages);
 }

@@ -97,15 +97,19 @@
                                             <span class="badge {% if robot.connected %}bg-success{% else %}bg-danger{% endif %} me-1">
                                                 {{ 'Connected' if robot.connected else 'Disconnected' }}
                                             </span>
-                                            <span class="badge bg-primary">Running</span>
+                                            <span class="badge {% if robot.system_status == 'active' %}bg-primary{% elif robot.system_status == 'failed' %}bg-danger{% elif robot.system_status == 'inactive' %}bg-warning{% elif robot.system_status == 'deactivating' %}bg-info{% else %}bg-secondary{% endif %}">
+                                                {{ robot.system_status|title }}
+                                            </span>
                                         </div>
                                         <div class="text-muted small mt-1">Last Poll: {{ robot.last_poll }}</div>
                                     </div>
                                 </div>
                                 {% if robot.images %}
-                                <div class="image-versions mb-2">
+                                <div class="image-versions">
                                     {% for image_name, tag in robot.images.items() %}
-                                    <div class="version-tag">{{ image_name }}: {{ tag }}</div>
+                                    <div class="version-tag">
+                                        <strong>{{ image_name }}</strong>: {{ tag }}
+                                    </div>
                                     {% endfor %}
                                 </div>
                                 {% endif %}
@@ -123,6 +127,15 @@
                                             {{ msg.message }}
                                         </div>
                                         {% endfor %}
+                                        {% if robot.messages|length > 0 %}
+                                        <div class="text-end mt-2">
+                                            <button class="btn btn-sm btn-outline-secondary view-history-btn" 
+                                                    data-robot-id="{{ robot.id }}"
+                                                    data-messages="{{ robot.all_messages|tojson|replace('"', '&quot;') }}">
+                                                <i class="bi bi-clock-history"></i> View History
+                                            </button>
+                                        </div>
+                                        {% endif %}
                                     </div>
                                     {% endif %}
                                 </div>
@@ -204,6 +217,19 @@
             <div class="dialog-actions">
                 <button id="confirmAction" class="btn btn-primary">Confirm</button>
                 <button id="cancelAction" class="btn btn-secondary ms-2">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Log Dialog -->
+    <div id="logDialog" class="dialog-overlay" style="display: none;">
+        <div class="dialog log-dialog">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h4 class="dialog-title m-0">Message History</h4>
+                <button type="button" class="btn-close" onclick="closeLogDialog()"></button>
+            </div>
+            <div id="logContent" class="log-content">
+                <!-- Logs will be dynamically inserted here -->
             </div>
         </div>
     </div>

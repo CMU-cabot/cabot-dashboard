@@ -51,8 +51,7 @@ async def poll(
 
         state = {
             "status": "connected",
-            "system_status": system_status,
-            "message": ""
+            "system_status": system_status
         }
         robot_manager.update_robot_state(client_id, state)
 
@@ -66,8 +65,7 @@ async def poll(
     finally:
         state = {
             "status": "disconnected",
-            "system_status": "unknown",
-            "message": ""
+            "system_status": "unknown"
         }
         robot_manager.update_robot_state(client_id, state)
 

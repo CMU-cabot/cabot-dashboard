@@ -38,10 +38,30 @@ body {
 
 .version-tag {
     background-color: #f8f9fa;
+    border: 1px solid #dee2e6;
     border-radius: 4px;
     padding: 4px 8px;
-    font-size: 0.8rem;
-    color: #666;
+    font-size: 14px;
+    color: #495057;
+    width: calc(33.33% - 6px);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.version-tag strong {
+    font-weight: 700;
+    color: #212529;
+}
+
+.version-tag .image-name {
+    font-weight: bold;
+    font-size: 1rem;
+}
+
+.version-tag .tag-name {
+    font-size: 1rem;
+    margin-left: 4px;
 }
 
 /* Button styles */
@@ -373,4 +393,57 @@ body {
 
 .error-message {
     margin-top: 0.5rem;
+}
+
+.image-versions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 8px 0;
+}
+
+.log-dialog {
+    width: 90vw !important;
+    height: 90vh !important;
+    max-width: none !important;
+    display: flex;
+    flex-direction: column;
+}
+
+.log-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1rem;
+    background-color: #f8f9fa;
+    border-radius: 4px;
+}
+
+.log-entry {
+    font-family: monospace;
+    word-break: break-word;
+    white-space: normal;
+}
+
+.log-timestamp {
+    color: #666;
+    min-width: 150px;
+    flex-shrink: 0;
+}
+
+.log-message {
+    flex: 1;
+    word-wrap: break-word;
+    padding-right: 1rem;
+}
+
+.log-level-error {
+    color: #dc3545;
+}
+
+.log-level-success {
+    color: #198754;
+}
+
+.log-level-info {
+    color: #0d6efd;
 }

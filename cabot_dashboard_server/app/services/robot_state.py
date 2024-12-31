@@ -25,7 +25,7 @@ class RobotStateManager:
                 "last_poll": None,
                 "connected": False,
                 "images": {},
-                "messages": []  # List of messages for each robot
+                "all_messages": []  # Only store messages in all_messages
             }
         return cls._instance
 
@@ -57,9 +57,9 @@ class RobotStateManager:
             "status": state.get("status", "unknown"),
             "system_status": state.get("system_status", "unknown"),
             "last_poll": datetime.now().isoformat(),
-            "connected": True if state.get("status") == "connected" else current_state.get("connected", False),
+            "connected": True if state.get("status") == "connected" else False,
             "images": current_state.get("images", {}),
-            "messages": current_state.get("messages", [])  # Preserve message history
+            "all_messages": current_state.get("all_messages", [])  # Preserve message history
         }
 
         self.connected_cabots[client_id] = updated_state
@@ -103,35 +103,27 @@ class RobotStateManager:
             logger.warning(f"Attempted to update status for unknown client: {client_id}")
             raise ValueError(f"Client {client_id} not found")
 
-    @classmethod
-    def update_robot_message(cls, cabot_id: str, message: str, level: str = "info"):
-        """Update robot message with timestamp"""
-        if not cls._instance:
+    def update_robot_message(self, robot_id, message, level='info'):
+        if robot_id not in self.connected_cabots:
             return
-
-        if cabot_id not in cls._instance.connected_cabots:
-            cls._instance.connected_cabots[cabot_id] = {
-                "id": cabot_id,
-                "status": "unknown",
-                "system_status": "unknown",
-                "last_poll": None,
-                "connected": False,
-                "images": {},
-                "messages": []
-            }
-
-        # Add new message with timestamp
+        
+        timestamp = datetime.now().isoformat()
         new_message = {
-            "message": message,
-            "level": level,
-            "timestamp": datetime.now().isoformat()
+            'timestamp': timestamp,
+            'message': message,
+            'level': level
         }
-
-        # Add to messages list and keep only the latest 100 messages
-        robot = cls._instance.connected_cabots[cabot_id]
-        robot["messages"].append(new_message)
-        if len(robot["messages"]) > 100:
-            robot["messages"] = robot["messages"][-100:]
+        
+        # Initialize all_messages list if it doesn't exist
+        if 'all_messages' not in self.connected_cabots[robot_id]:
+            self.connected_cabots[robot_id]['all_messages'] = []
+        
+        # Add new message to all_messages
+        self.connected_cabots[robot_id]['all_messages'].append(new_message)
+        
+        # Keep only the latest MAX_MESSAGES messages
+        if len(self.connected_cabots[robot_id]['all_messages']) > self.MAX_MESSAGES:
+            self.connected_cabots[robot_id]['all_messages'] = self.connected_cabots[robot_id]['all_messages'][-self.MAX_MESSAGES:]
 
     def update_robot_images(self, client_id: str, images: Dict[str, str]):
         """Update image tags for a robot
@@ -171,73 +163,36 @@ class RobotStateManager:
             logger.warning(f"Attempted to get images for unknown client: {client_id}")
             raise ValueError(f"Client {client_id} not found")
 
-    def get_connected_cabots_list(self) -> list:
-        current_time = datetime.now()
+    def get_connected_cabots_list(self):
         cabot_list = []
-        logger.debug(f"Getting all cabots from: {self.connected_cabots}")
-        for robot_id, robot_info in self.connected_cabots.items():
-            try:
-                last_poll_str = robot_info.get('last_poll')
-                if last_poll_str:
-                    last_poll = datetime.fromisoformat(last_poll_str)
-                    time_since_last_poll = (current_time - last_poll).seconds
-                    if robot_info.get('status') == 'connected':
-                        is_connected = time_since_last_poll < self.POLLING_TIMEOUT
-                    else:
-                        is_connected = False
-                else:
-                    time_since_last_poll = None
-                    is_connected = False
-
-                # Get only the latest messages within 5 minutes
-                messages = []
-                for msg in robot_info.get('messages', []):
-                    try:
-                        msg_time = datetime.fromisoformat(msg['timestamp'])
-                        if (current_time - msg_time).total_seconds() <= 300:  # 5 minutes = 300 seconds
-                            messages.append(msg)
-                    except Exception as e:
-                        logger.error(f"Error processing message timestamp: {e}")
-
-                # Sort messages by timestamp in descending order
-                messages = sorted(messages, key=lambda x: x['timestamp'], reverse=True)
-
-                # Limit to DISPLAY_MESSAGES
-                messages = messages[:self.DISPLAY_MESSAGES]
-
-                robot_data = {
-                    'id': robot_id,
-                    'name': robot_id,
-                    'status': robot_info.get('status', 'unknown'),
-                    'system_status': robot_info.get('system_status', 'unknown'),
-                    'last_poll': robot_info.get('last_poll'),
-                    'messages': messages,
-                    'connected': is_connected,
-                    'time_since_last_poll': time_since_last_poll,
-                    'polling_timeout': self.POLLING_TIMEOUT,
-                    'images': robot_info.get('images', {})
-                }
-
-                # Update connected status in robot_info for future reference
-                robot_info['connected'] = is_connected
-
-                cabot_list.append(robot_data)
-                logger.debug(f"Added robot {robot_id} to list. Connected: {is_connected}, "
-                           f"Last poll: {time_since_last_poll}s ago (timeout: {self.POLLING_TIMEOUT}s)")
-            except Exception as e:
-                logger.error(f"Error processing robot {robot_id}: {e}")
-                cabot_list.append({
-                    'id': robot_id,
-                    'name': robot_id,
-                    'status': 'error',
-                    'system_status': 'unknown',
-                    'message': str(e),
-                    'connected': False,
-                    'polling_timeout': self.POLLING_TIMEOUT,
-                    'images': {},
-                    'messages': []
-                })
-        logger.debug(f"Returning all cabots: {cabot_list}")
+        current_time = datetime.now()
+        
+        for robot_id, robot in self.connected_cabots.items():
+            # Get all messages and sort by timestamp in descending order
+            all_messages = sorted(robot.get('all_messages', []), key=lambda x: x['timestamp'], reverse=True)
+            
+            # For AIS panel display: Get only the latest messages within 5 minutes
+            panel_messages = []
+            for msg in all_messages:
+                try:
+                    msg_time = datetime.fromisoformat(msg['timestamp'])
+                    if (current_time - msg_time).total_seconds() <= 300:  # 5 minutes = 300 seconds
+                        panel_messages.append(msg)
+                        if len(panel_messages) >= self.DISPLAY_MESSAGES:
+                            break
+                except Exception as e:
+                    logger.error(f"Error processing message timestamp: {e}")
+            
+            cabot_list.append({
+                'id': robot_id,
+                'name': robot.get('name', robot_id),
+                'connected': robot.get('connected', False),
+                'last_poll': robot.get('last_poll', None),
+                'messages': panel_messages,  # Latest 5 messages within 5 minutes for panel display
+                'all_messages': all_messages,  # All messages for history view
+                'images': robot.get('images', {}),
+                'system_status': robot.get('system_status', 'unknown')  # Add system_status
+            })
         return cabot_list
 
     async def send_command(self, robot_id: str, command: Dict) -> None:
