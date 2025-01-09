@@ -19,6 +19,7 @@ class Config:
     max_retries: int
     retry_delay: int
     polling_interval: int
+    debug_mode: bool
 
     @classmethod
     def from_env(cls) -> 'Config':
@@ -31,7 +32,8 @@ class Config:
             api_key=os.environ.get("CABOT_DASHBOARD_API_KEY", "your_secret_api_key_here"),
             max_retries=int(os.environ.get("CABOT_DASHBOARD_MAX_RETRIES", "5")),
             retry_delay=int(os.environ.get("CABOT_DASHBOARD_RETRY_DELAY", "5")),
-            polling_interval=int(os.environ.get("CABOT_DASHBOARD_POLLING_INTERVAL", "1"))
+            polling_interval=int(os.environ.get("CABOT_DASHBOARD_POLLING_INTERVAL", "1")),
+            debug_mode=os.environ.get('CABOT_DASHBOARD_DEBUG_MODE', 'false').lower() == 'true'
         )
 
 class CommandType(Enum):
@@ -40,15 +42,27 @@ class CommandType(Enum):
     ROS_STOP = "ros-stop"
     SYSTEM_REBOOT = "system-reboot"
     SYSTEM_POWEROFF = "system-poweroff"
+    CABOT_IS_ACTIVE = "cabot-is-active"
     DEBUG1 = "debug1"
     DEBUG2 = "debug2"
 
 class SystemCommand:
     """System command execution handler"""
-    def __init__(self, cabot_id: str):
+    def __init__(self, cabot_id: str, debug_mode: bool = False):
         self.cabot_id = cabot_id
+        self.debug_mode = debug_mode
+        self.logger = logging.getLogger(__name__)
         
     async def execute(self, command: list[str]) -> Tuple[bool, Optional[str]]:
+
+        if self.debug_mode:
+            if all(cmd in command for cmd in ['systemctl', 'is-active', 'cabot']):
+                debug_status = os.environ.get('CABOT_DASHBOARD_DEBUG_STATUS', 'active')
+                self.logger.debug(f"Debug mode: Returning status {debug_status}")
+                if debug_status == 'active':
+                    return True, None
+                return False, debug_status
+
         try:
             process = await asyncio.create_subprocess_exec(
                 *command,
@@ -56,8 +70,15 @@ class SystemCommand:
                 stderr=asyncio.subprocess.PIPE
             )
             stdout, stderr = await process.communicate()
-            return (True, None) if process.returncode == 0 else (False, stderr.decode() if stderr else "Unknown error")
+
+            if process.returncode == 0:
+                return True, None
+            else:
+                error_msg = stdout.decode().strip() or stderr.decode().strip() or "Unknown error"
+                return False, error_msg
+
         except Exception as e:
+            self.logger.error(f"Error executing command: {e}")
             return False, str(e)
 
 def setup_logger(config: Config) -> logging.Logger:
@@ -75,7 +96,7 @@ class CabotDashboardClient:
         self.cabot_id = cabot_id
         self.config = Config.from_env()
         self.logger = setup_logger(self.config)
-        self.system_command = SystemCommand(cabot_id)
+        self.system_command = SystemCommand(cabot_id, self.config.debug_mode)
         self._command_handlers = {
             CommandType.ROS_START: ['systemctl', '--user', 'start', 'cabot'],
             CommandType.ROS_STOP: ['systemctl', '--user', 'stop', 'cabot'],
@@ -134,23 +155,49 @@ class CabotDashboardClient:
         except Exception as e:
             await self.send_status(session, f"Error executing command {command_type}: {str(e)}")
 
+    async def get_cabot_system_status(self) -> str:
+        success, error = await self.system_command.execute(['systemctl', '--user', 'is-active', 'cabot'])
+        if not success:
+            if not error:
+                return "unknown"
+
+            status = error.strip()
+            if status == "inactive":
+                return "inactive"
+            elif status == "failed":
+                return "failed"
+            elif status == "deactivating":
+                return "deactivating"
+            else:
+                self.logger.info(f"check_service_active unknown status: {status}")
+                return "unknown"
+
+        return "active"
+
     async def run(self) -> None:
         async with aiohttp.ClientSession() as session:
             while True:
                 try:
                     if await self.connect(session):
                         while True:
-                            status_code, data = await self._make_request(session, 'get', f"poll/{self.cabot_id}")
-                            
+                            cabot_system_status = await self.get_cabot_system_status()
+                            self.logger.debug(f"Add status to poll request: {cabot_system_status}")
+                            status_code, data = await self._make_request(
+                                session, 
+                                'get', 
+                                f"poll/{self.cabot_id}",
+                                {"cabot_system_status": cabot_system_status}
+                            )
+
                             if status_code == 200:
                                 await self.handle_command(session, data)
                             elif status_code == 404:
                                 break
-                                
+
                             await asyncio.sleep(self.config.polling_interval)
-                            
+
                     await asyncio.sleep(self.config.retry_delay)
-                    
+
                 except Exception:
                     await asyncio.sleep(self.config.retry_delay)
 
@@ -167,7 +214,7 @@ async def main():
         if not cabot_id:
             logging.error("Environment variable CABOT_ID is not set")
             return
-        
+
         client = CabotDashboardClient(cabot_id)
         await client.run()
 

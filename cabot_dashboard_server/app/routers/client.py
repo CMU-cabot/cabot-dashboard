@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Response
+from fastapi import APIRouter, Depends, HTTPException, Response, Request
 from app.services.robot_state import RobotStateManager
 from app.services.command_queue import CommandQueueManager
 from app.dependencies import (
@@ -8,6 +8,7 @@ from app.dependencies import (
 )
 from app.utils.logger import logger
 import asyncio
+from typing import Optional
 
 router = APIRouter(tags=["client"])
 
@@ -55,6 +56,7 @@ async def send_command(
 
 @router.get("/poll/{client_id}")
 async def poll(
+    request: Request,
     client_id: str,
     robot_manager: RobotStateManager = Depends(get_robot_state_manager),
     command_queue_manager: CommandQueueManager = Depends(get_command_queue_manager),
@@ -64,7 +66,17 @@ async def poll(
         logger.warning(f"Poll attempted for disconnected client {client_id}")
         raise HTTPException(status_code=404, detail="Robot not connected")
     try:
-        robot_manager.update_robot_polling(client_id)
+        body = await request.json()
+        system_status = body.get("cabot_system_status", "unknown")
+        logger.debug(f"Received poll request from {client_id} with system_status: {system_status}")
+
+        state = {
+            "status": "connected",
+            "system_status": system_status,
+            "message": ""
+        }
+        robot_manager.update_robot_state(client_id, state)
+
         result = await command_queue_manager.wait_for_update(client_id)
         return result
     except asyncio.TimeoutError:

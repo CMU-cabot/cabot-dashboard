@@ -94,7 +94,8 @@ function updateCabotList(cabots) {
     table.innerHTML = `
         <tr>
             <th>ID</th>
-            <th>Status</th>
+            <th>Polling Status</th>
+            <th>System Status</th>
             <th>Actions</th>
             <th>Last Poll Time</th>
             <th>Message</th>
@@ -105,10 +106,14 @@ function updateCabotList(cabots) {
         const row = table.insertRow();
         row.insertCell().textContent = cabot.id || 'Unknown';
         
-        const statusCell = row.insertCell();
-        statusCell.textContent = cabot.connected ? 'Connected' : 'Disconnected';
-        statusCell.className = cabot.connected ? 'status-connected' : 'status-disconnected';
-        
+        const pollingStatusCell = row.insertCell();
+        pollingStatusCell.textContent = cabot.connected ? 'Connected' : 'Disconnected';
+        pollingStatusCell.className = cabot.connected ? 'status-connected' : 'status-disconnected';
+
+        const systemStatusCell = row.insertCell();
+        systemStatusCell.textContent = cabot.system_status || 'Unknown';
+        systemStatusCell.className = `status-${cabot.system_status ? cabot.system_status.toLowerCase() : 'unknown'}`;
+
         const actionCell = row.insertCell();
         if (cabot.connected) {
             actionCell.innerHTML = `
