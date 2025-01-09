@@ -3,17 +3,36 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from app.services.auth import AuthService
 from app.dependencies import get_auth_service
+from pathlib import Path
+from app.utils.logger import logger
+
 
 router = APIRouter(tags=["auth"])
-templates = Jinja2Templates(directory="templates")
+templates = Jinja2Templates(directory=Path(__file__).parent.parent.parent / "templates")
 
-@router.get("/login", response_class=HTMLResponse)
+@router.get("/login")
 async def login_page(request: Request):
-    """Display login page"""
-    return templates.TemplateResponse("login.html", {
-        "request": request,
-        "error": None
-    })
+    error = request.query_params.get('error')
+    error_message = None
+    
+    if error == 'unauthorized_account':
+        error_message = 'unauthorized_account'
+    elif error:
+        error_message = error
+
+    return templates.TemplateResponse(
+        "login.html",
+        {"request": request, "error_message": error_message}
+    )
+
+@router.get("/auth/callback")
+async def auth_callback(request: Request):
+    try:
+        request.session["authenticated"] = True
+        return RedirectResponse(url="/dashboard")
+    except Exception as e:
+        request.session["error_message"] = "Login failed. Please try again."
+    return RedirectResponse(url="/login")
 
 @router.post("/login")
 async def login(
@@ -24,11 +43,10 @@ async def login(
     form = await request.form()
     username = form.get("username")
     password = form.get("password")
-    # Add debug log
-    print(f"Login attempt for user: {username}")  # For development only
+    logger.info(f"Login attempt for user: {username}")
     if auth_service.validate_user(username, password):
         session_token = auth_service.create_session(username)
-        response = RedirectResponse(url="/dashboard", status_code=303)  # Override response object
+        response = RedirectResponse(url="/dashboard", status_code=303)
         response.set_cookie(
             key="session_token",
             value=session_token,
@@ -36,8 +54,7 @@ async def login(
             secure=True,
             samesite="strict"
         )
-        return response  # Return modified response
-        # return RedirectResponse(url="/dashboard", status_code=303)
+        return response
     
     return templates.TemplateResponse(
         "login.html",
@@ -50,7 +67,6 @@ async def logout(
     session_token: str = Cookie(None),
     auth_service: AuthService = Depends(get_auth_service)
 ):
-    """Logout process"""
     if session_token:
         auth_service.remove_session(session_token)
     response = RedirectResponse(url="/", status_code=303)
@@ -63,12 +79,10 @@ async def root(
     session_token: str = Cookie(None),
     auth_service: AuthService = Depends(get_auth_service)
 ):
-    """Root page"""
     try:
         if session_token and auth_service.validate_session(session_token, timeout=3600):
             return RedirectResponse(url="/dashboard")
     except ValueError:
-        # Show login page on authentication error
         pass
 
     return templates.TemplateResponse("login.html", {
