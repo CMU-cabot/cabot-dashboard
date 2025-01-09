@@ -24,7 +24,17 @@ async def dashboard_page(
     robot_manager: RobotStateManager = Depends(get_robot_state_manager)
 ):
     try:
-        if not session_token or not auth_service.validate_session(session_token, timeout=3600):
+        logger.info(f"Accessing dashboard with session_token: {session_token[:10] if session_token else 'None'}...")
+        
+        if not session_token:
+            logger.warning("No session token provided")
+            return RedirectResponse(url="/login")
+            
+        is_valid = auth_service.validate_session(session_token, timeout=3600)
+        logger.info(f"Session validation result: {is_valid}")
+        
+        if not is_valid:
+            logger.warning("Invalid or expired session token")
             return RedirectResponse(url="/login")
 
         docker_versions = docker_hub_service.get_all_cached_data()
@@ -42,7 +52,11 @@ async def dashboard_page(
                 "total_robots": len(robots)
             }
         )
-    except ValueError:
+    except ValueError as ve:
+        logger.error(f"ValueError in dashboard_page: {str(ve)}")
+        return RedirectResponse(url="/login")
+    except Exception as e:
+        logger.error(f"Unexpected error in dashboard_page: {str(e)}")
         return RedirectResponse(url="/login")
 
 @router.websocket("/ws")

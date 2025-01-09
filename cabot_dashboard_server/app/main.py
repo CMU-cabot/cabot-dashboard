@@ -8,8 +8,11 @@ from app.config import settings
 from app.utils.logger import logger
 from app.services.robot_state import RobotStateManager
 from fastapi.middleware.cors import CORSMiddleware
+from app.auth import microsoft
+from starlette.middleware.sessions import SessionMiddleware
+from starlette.responses import RedirectResponse
 
-# Create FastAPI application
+
 app = FastAPI(
     title="CaBot Dashboard",
     description="Dashboard for monitoring and controlling CaBots",
@@ -41,6 +44,14 @@ async def add_security_headers(request: Request, call_next):
 templates = Jinja2Templates(directory=root_dir / "templates")
 
 app.add_middleware(ErrorLoggingMiddleware)
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=settings.session_secret_key,
+    session_cookie="cabot_dashboard_session",
+    max_age=settings.session_timeout,
+    same_site="lax",
+    https_only=False
+)
 
 robot_state_manager = RobotStateManager()
 
@@ -48,6 +59,7 @@ def get_robot_state_manager():
     return robot_state_manager
 
 app.include_router(auth.router)
+app.include_router(microsoft.router)
 app.include_router(
     client.router,
     prefix="/api/client",
@@ -64,6 +76,7 @@ async def startup_event():
     logger.info("Starting CaBot Dashboard server")
     logger.info(f"Environment: API_KEY={'*' * len(settings.api_key)}")
     logger.info(f"Max robots: {settings.max_robots}")
+    logger.info("Microsoft authentication enabled")
 
 @app.on_event("shutdown")
 async def shutdown_event():
