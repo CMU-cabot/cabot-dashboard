@@ -6,7 +6,9 @@ import logging
 import os
 from aiohttp import ClientError
 from dataclasses import dataclass
-from typing import Optional, Tuple, Dict, Any
+from typing import Optional, Tuple, Dict, Any, Union
+import json
+import random
 
 @dataclass
 class Config:
@@ -43,6 +45,8 @@ class CommandType(Enum):
     SYSTEM_REBOOT = "system-reboot"
     SYSTEM_POWEROFF = "system-poweroff"
     CABOT_IS_ACTIVE = "cabot-is-active"
+    SOFTWARE_UPDATE = "software_update"
+    GET_IMAGE_TAGS = "get-image-tags"
     DEBUG1 = "debug1"
     DEBUG2 = "debug2"
 
@@ -53,10 +57,21 @@ class SystemCommand:
         self.debug_mode = debug_mode
         self.logger = logging.getLogger(__name__)
         
-    async def execute(self, command: list[str]) -> Tuple[bool, Optional[str]]:
-
+    async def execute(self, command: list[str], command_type: Optional[CommandType] = None) -> Tuple[bool, Optional[str]]:
         if self.debug_mode:
-            if all(cmd in command for cmd in ['systemctl', 'is-active', 'cabot']):
+            # Debug mode handling based on CommandType
+            if command_type == CommandType.GET_IMAGE_TAGS:
+                self.logger.info("Debug mode: Returning debug image tags")
+                # Add 2 seconds delay for debugging
+                await asyncio.sleep(2)
+                # Return formatted output like actual docker images command
+                debug_output = []
+                num_images = random.randint(3, 10)
+                for i in range(1, num_images + 1):
+                    debug_output.append(f"image{i}:tag{i}")
+                self.logger.info(f"Debug mode: Generated {num_images} images: {debug_output}")
+                return True, "\n".join(debug_output)
+            elif command_type == CommandType.CABOT_IS_ACTIVE:
                 debug_status = os.environ.get('CABOT_DASHBOARD_DEBUG_STATUS', 'active')
                 self.logger.debug(f"Debug mode: Returning status {debug_status}")
                 if debug_status == 'active':
@@ -64,6 +79,7 @@ class SystemCommand:
                 return False, debug_status
 
         try:
+            self.logger.info(f"Executing command: {' '.join(command)}")
             process = await asyncio.create_subprocess_exec(
                 *command,
                 stdout=asyncio.subprocess.PIPE,
@@ -71,14 +87,37 @@ class SystemCommand:
             )
             stdout, stderr = await process.communicate()
 
+            stdout_str = stdout.decode().strip()
+            stderr_str = stderr.decode().strip()
+            self.logger.info(f"Command returncode: {process.returncode}")
+            self.logger.info(f"Command stdout: {stdout_str}")
+            self.logger.info(f"Command stderr: {stderr_str}")
+
             if process.returncode == 0:
-                return True, None
+                return True, stdout_str
             else:
-                error_msg = stdout.decode().strip() or stderr.decode().strip() or "Unknown error"
+                error_msg = stdout_str or stderr_str or "Unknown error"
                 return False, error_msg
 
         except Exception as e:
             self.logger.error(f"Error executing command: {e}")
+            return False, str(e)
+
+    async def execute_software_update(self, images: list[dict]) -> Tuple[bool, Optional[str]]:
+        try:
+            # Use the existing execute method to run the update command
+            update_command = [
+                'sudo',
+                'systemctl',
+                'start',
+                f'cabot-software-update@{json.dumps(images)}'  # Pass images as a parameter to the service
+            ]
+            
+            self.logger.info(f"Executing software update with images: {images}")
+            return await self.execute(update_command)
+            
+        except Exception as e:
+            self.logger.error(f"Error executing software update: {e}")
             return False, str(e)
 
 def setup_logger(config: Config) -> logging.Logger:
@@ -109,15 +148,28 @@ class CabotDashboardClient:
     async def _make_request(self, session: aiohttp.ClientSession, method: str, endpoint: str, data: Optional[Dict] = None) -> Tuple[Optional[int], Optional[Dict]]:
         headers = {"X-API-Key": self.config.api_key}
         url = f"{self.config.server_url}/api/client/{endpoint}"
+        self.logger.info(f"Request URL: {url}")
+        self.logger.info(f"Request data: {json.dumps(data, indent=2)}")
         try:
             async with getattr(session, method)(url, headers=headers, json=data) as response:
-                return response.status, await response.json() if response.status == 200 else None
+                response_data = await response.json() if response.status == 200 else None
+                self.logger.info(f"Response status: {response.status}")
+                self.logger.info(f"Response data: {json.dumps(response_data, indent=2)}")
+                return response.status, response_data
         except ClientError as e:
             self.logger.error(f"Request error: {e}")
             return None, None
 
-    async def send_status(self, session: aiohttp.ClientSession, status: str) -> bool:
-        status_code, _ = await self._make_request(session, 'post', f"send/{self.cabot_id}", {"message": status})
+    async def send_status(self, session: aiohttp.ClientSession, status: Union[str, Dict]) -> bool:
+        """Send status to server
+        Args:
+            session: aiohttp client session
+            status: Status message (string) or status data (dict)
+        """
+        # If status is already a dict, use it as is, otherwise create a simple message dict
+        data = {"message": status} if isinstance(status, str) else status
+        self.logger.info(f"Sending status: {json.dumps(data, indent=2)}")
+        status_code, _ = await self._make_request(session, 'post', f"send/{self.cabot_id}", data)
         if status_code == 404:
             return False
         return True
@@ -134,29 +186,136 @@ class CabotDashboardClient:
 
     async def handle_command(self, session: aiohttp.ClientSession, command: Dict[str, Any]) -> None:
         command_type = command.get('command')
+        self.logger.info(f"Received command: {command}")
+        
         try:
             cmd_type = CommandType(command_type)
-            command_args = self._command_handlers.get(cmd_type)
             
-            if not command_args:
-                await self.send_status(session, f"Unknown command type: {command_type}")
+            if cmd_type == CommandType.SOFTWARE_UPDATE:
+                images = command.get('commandOption', {}).get('images', [])
+                if not images:
+                    await self.send_status(session, {
+                        "type": "software_update",
+                        "status": "error",
+                        "message": "No images specified for software update"
+                    })
+                    return
+                
+                await self.send_status(session, {
+                    "type": "software_update",
+                    "status": "start",
+                    "message": f"Starting software update for {len(images)} images..."
+                })
+                success, error = await self.system_command.execute_software_update(images)
+                
+                if success:
+                    await self.send_status(session, {
+                        "type": "software_update",
+                        "status": "success",
+                        "message": "Software update completed successfully"
+                    })
+                else:
+                    await self.send_status(session, {
+                        "type": "software_update",
+                        "status": "error",
+                        "message": f"Software update failed: {error}"
+                    })
                 return
 
-            await self.send_status(session, f"Executing {command_type}...")
+            if cmd_type == CommandType.GET_IMAGE_TAGS:
+                self.logger.info("Starting GET_IMAGE_TAGS command processing")
+                await self.send_status(session, {
+                    "type": "image_tags",
+                    "status": "start",
+                    "message": "Getting image tags..."
+                })
+                # Get docker images tags
+                self.logger.info("Executing docker images command")
+                success, output = await self.system_command.execute(['docker', 'images', '--format', '{{.Repository}}:{{.Tag}}'], cmd_type)
+                self.logger.info(f"Docker images command result - success: {success}, output: {output}")
+                
+                # Parse the output and create a dictionary of image:tag pairs
+                image_tags = {}
+                if success and output:
+                    for line in output.split('\n'):
+                        if line.strip():
+                            try:
+                                repo_tag = line.strip().split(':')
+                                if len(repo_tag) == 2:
+                                    if self.config.debug_mode:
+                                        # In debug mode, use the image name as is
+                                        image_name = repo_tag[0]
+                                    else:
+                                        # In production mode, get the last part of the image name
+                                        image_name = repo_tag[0].split('/')[-1]
+                                    image_tags[image_name] = repo_tag[1]
+                                    self.logger.info(f"Parsed image tag - name: {image_name}, tag: {repo_tag[1]}")
+                            except Exception as e:
+                                self.logger.error(f"Error parsing image tag line {line}: {e}")
+                    
+                    self.logger.info(f"Final parsed image tags: {image_tags}")
+                    # Send the image tags back
+                    await self.send_status(session, {
+                        "type": "image_tags",
+                        "status": "success",
+                        "tags": image_tags
+                    })
+                else:
+                    error_msg = "No output from docker images command" if not output else f"Error getting image tags: {output}"
+                    await self.send_status(session, {
+                        "type": "image_tags",
+                        "status": "error",
+                        "message": error_msg
+                    })
+                return
+            
+            command_args = self._command_handlers.get(cmd_type)
+            if not command_args:
+                await self.send_status(session, {
+                    "type": "command",
+                    "status": "error",
+                    "message": f"Unknown command type: {command_type}"
+                })
+                return
+
+            await self.send_status(session, {
+                "type": "command",
+                "status": "start",
+                "message": f"Executing {command_type}..."
+            })
             success, error = await self.system_command.execute(command_args)
 
             if success:
-                await self.send_status(session, f"{command_type} completed successfully")
+                await self.send_status(session, {
+                    "type": "command",
+                    "status": "success",
+                    "message": f"{command_type} completed successfully"
+                })
             else:
-                await self.send_status(session, f"Error {command_type}: {error}")
+                await self.send_status(session, {
+                    "type": "command",
+                    "status": "error",
+                    "message": f"Error {command_type}: {error}"
+                })
 
         except ValueError:
-            await self.send_status(session, f"Invalid command type: {command_type}")
+            await self.send_status(session, {
+                "type": "command",
+                "status": "error",
+                "message": f"Invalid command type: {command_type}"
+            })
         except Exception as e:
-            await self.send_status(session, f"Error executing command {command_type}: {str(e)}")
+            await self.send_status(session, {
+                "type": "command",
+                "status": "error",
+                "message": f"Error executing command {command_type}: {str(e)}"
+            })
 
     async def get_cabot_system_status(self) -> str:
-        success, error = await self.system_command.execute(['systemctl', '--user', 'is-active', 'cabot'])
+        success, error = await self.system_command.execute(
+            ['systemctl', '--user', 'is-active', 'cabot'],
+            CommandType.CABOT_IS_ACTIVE
+        )
         if not success:
             if not error:
                 return "unknown"

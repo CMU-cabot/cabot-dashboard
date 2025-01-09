@@ -9,6 +9,7 @@ from app.dependencies import (
 from app.utils.logger import logger
 import asyncio
 from typing import Optional
+import json
 
 router = APIRouter(tags=["client"])
 
@@ -32,28 +33,6 @@ async def connect(
         logger.error(f"Error connecting client {client_id}: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
-@router.post("/send_command/{cabot_id}")
-async def send_command(
-    cabot_id: str,
-    command: dict,
-    robot_manager: RobotStateManager = Depends(get_robot_state_manager),
-    command_queue_manager: CommandQueueManager = Depends(get_command_queue_manager),
-    api_key: str = Depends(get_api_key)
-):
-    try:
-        if cabot_id not in robot_manager.connected_cabots:
-            raise HTTPException(status_code=404, detail="Specified cabot is not connected")
-        
-        await command_queue_manager.add_command(cabot_id, command)
-        logger.info(f"Command queued for cabot {cabot_id}: {command}")
-        return {"status": "success", "message": f"Command queued for cabot {cabot_id}"}
-    except ValueError as e:
-        logger.error(f"Invalid command format for cabot {cabot_id}: {e}")
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        logger.error(f"Error processing command for cabot {cabot_id}: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
-
 @router.get("/poll/{client_id}")
 async def poll(
     request: Request,
@@ -72,8 +51,7 @@ async def poll(
 
         state = {
             "status": "connected",
-            "system_status": system_status,
-            "message": ""
+            "system_status": system_status
         }
         robot_manager.update_robot_state(client_id, state)
 
@@ -85,8 +63,11 @@ async def poll(
         logger.error(f"Error in poll for {client_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
     finally:
-        robot_manager.update_robot_status(client_id, "disconnected")
-        robot_manager.update_robot_message(client_id, "")
+        state = {
+            "status": "disconnected",
+            "system_status": "unknown"
+        }
+        robot_manager.update_robot_state(client_id, state)
 
 @router.post("/send/{client_id}")
 async def send_status(
@@ -99,9 +80,36 @@ async def send_status(
         raise HTTPException(status_code=404, detail="Specified cabot is not connected")
     
     try:
-        message = status.get("message", "")
-        robot_manager.update_robot_message(client_id, message)
-        logger.info(f"Received status from {client_id}: {message}")
+        logger.info(f"Received from {client_id} status: {json.dumps(status, indent=2)}")
+        
+        # Get message type and status directly from the status object
+        msg_type = status.get("type", "plain")
+        msg_status = status.get("status", "info")
+        msg_content = status.get("message", "")
+
+        # Handle different message types
+        if msg_type == "image_tags":
+            if msg_status == "success":
+                # Update robot images with the tags data
+                tags = status.get("tags", {})
+                logger.info(f"Updating image tags for {client_id}: {json.dumps(tags, indent=2)}")
+                robot_manager.update_robot_images(client_id, tags)
+                robot_manager.update_robot_message(client_id, "Image tags updated successfully", "success")
+            elif msg_status == "error":
+                robot_manager.update_robot_message(client_id, msg_content, "error")
+            else:
+                robot_manager.update_robot_message(client_id, msg_content, msg_status)
+        elif msg_type == "software_update":
+            robot_manager.update_robot_message(client_id, msg_content, msg_status)
+        elif msg_type == "command":
+            robot_manager.update_robot_message(client_id, msg_content, msg_status)
+        else:
+            # If no type is specified, treat the entire message as a plain text message
+            if "message" in status:
+                robot_manager.update_robot_message(client_id, msg_content, msg_status)
+            else:
+                robot_manager.update_robot_message(client_id, str(status), "info")
+
         return {"status": "success"}
     except Exception as e:
         logger.error(f"Error updating status for {client_id}: {e}")
