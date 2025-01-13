@@ -6,9 +6,11 @@ from datetime import timedelta
 from app.services.auth import AuthService, Token, User
 from app.dependencies import get_auth_service
 from app.config import settings
+from pathlib import Path
+from app.utils.logger import logger
 
 router = APIRouter(tags=["auth"])
-templates = Jinja2Templates(directory="templates")
+templates = Jinja2Templates(directory=Path(__file__).parent.parent.parent / "templates")
 auth_service = AuthService()
 
 class ClientCredentialsRequestForm:
@@ -22,13 +24,29 @@ class ClientCredentialsRequestForm:
         self.client_id = client_id
         self.client_secret = client_secret
 
-@router.get("/login", response_class=HTMLResponse)
+@router.get("/login")
 async def login_page(request: Request):
-    """Display login page"""
-    return templates.TemplateResponse("login.html", {
-        "request": request,
-        "error": None
-    })
+    error = request.query_params.get('error')
+    error_message = None
+    
+    if error == 'unauthorized_account':
+        error_message = 'unauthorized_account'
+    elif error:
+        error_message = error
+
+    return templates.TemplateResponse(
+        "login.html",
+        {"request": request, "error_message": error_message}
+    )
+
+@router.get("/auth/callback")
+async def auth_callback(request: Request):
+    try:
+        request.session["authenticated"] = True
+        return RedirectResponse(url="/dashboard")
+    except Exception as e:
+        request.session["error_message"] = "Login failed. Please try again."
+    return RedirectResponse(url="/login")
 
 @router.post("/login")
 async def login(
@@ -39,7 +57,7 @@ async def login(
     form = await request.form()
     username = form.get("username")
     password = form.get("password")
-    
+
     user = auth_service.authenticate_user(username, password)
     if not user:
         return templates.TemplateResponse(
@@ -74,12 +92,10 @@ async def root(
     session_token: str = Cookie(None),
     auth_service: AuthService = Depends(get_auth_service)
 ):
-    """Root page"""
     try:
         if session_token and await auth_service.validate_token(session_token):
             return RedirectResponse(url="/dashboard")
     except ValueError:
-        # Show login page on authentication error
         pass
 
     return templates.TemplateResponse("login.html", {

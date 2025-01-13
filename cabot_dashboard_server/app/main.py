@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, Request
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pathlib import Path
@@ -7,8 +7,12 @@ from app.routers import client, dashboard, auth
 from app.config import settings
 from app.utils.logger import logger
 from app.services.robot_state import RobotStateManager
+from fastapi.middleware.cors import CORSMiddleware
+from app.auth import microsoft
+from starlette.middleware.sessions import SessionMiddleware
+from starlette.responses import RedirectResponse
 
-# Create FastAPI application
+
 app = FastAPI(
     title="CaBot Dashboard",
     description="Dashboard for monitoring and controlling CaBots",
@@ -16,10 +20,38 @@ app = FastAPI(
 )
 
 root_dir = Path(__file__).parent.parent
-app.mount("/static", StaticFiles(directory=root_dir / "static"), name="static")
+app.mount("/static", StaticFiles(directory=root_dir / "static", html=True), name="static")
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=settings.cors_origins,
+    allow_credentials=True,
+    allow_methods=settings.cors_methods,
+    allow_headers=settings.cors_headers,
+)
+
+# Add security headers middleware
+@app.middleware("http")
+async def add_security_headers(request: Request, call_next):
+    response = await call_next(request)
+    response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Content-Security-Policy"] = "upgrade-insecure-requests"
+    return response
+
 templates = Jinja2Templates(directory=root_dir / "templates")
 
 app.add_middleware(ErrorLoggingMiddleware)
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=settings.session_secret_key,
+    session_cookie="cabot_dashboard_session",
+    max_age=settings.session_timeout,
+    same_site="lax",
+    https_only=False
+)
 
 robot_state_manager = RobotStateManager()
 
@@ -27,6 +59,7 @@ def get_robot_state_manager():
     return robot_state_manager
 
 app.include_router(auth.router)
+app.include_router(microsoft.router)
 app.include_router(
     client.router,
     dependencies=[Depends(get_robot_state_manager)]
@@ -42,6 +75,7 @@ async def startup_event():
     logger.info("Starting CaBot Dashboard server")
     logger.info(f"Environment: API_KEY={'*' * len(settings.api_key)}")
     logger.info(f"Max robots: {settings.max_robots}")
+    logger.info("Microsoft authentication enabled")
 
 @app.on_event("shutdown")
 async def shutdown_event():

@@ -8,6 +8,14 @@ from pydantic import BaseModel
 from app.config import settings
 from app.utils.logger import logger
 import json
+import bcrypt
+import secrets
+import time
+from typing import Dict, Tuple
+import json
+from app.utils.logger import get_logger
+from datetime import datetime
+import random
 
 class Token(BaseModel):
     access_token: str
@@ -23,7 +31,16 @@ class User(BaseModel):
 class UserInDB(User):
     hashed_password: str
 
+
 class AuthService:
+    _instance = None
+    _initialized = False
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super(AuthService, cls).__new__(cls)
+        return cls._instance
+
     def __init__(self):
         self.pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
         self.oauth2_user_scheme = OAuth2PasswordBearer(tokenUrl="token")
