@@ -1,16 +1,3 @@
-## TODO
-- [ ] メッセージ仕様
-- [x] API認証
-- [x] API認証（oAuth）
-- [x] 管理画面認証
-- [x] 管理画面認証（EntraID）
-- [ ] 管理画面UI設計
-- [ ] 管理項目の確定
-- [x] クライアント側アクション実行
-- [ ] サーバ側のデータ管理
-- [ ] 性能測定
-
-
 # cabot dashboard
 
 複数のロボットを管理する仕組み
@@ -80,15 +67,19 @@ graph TB
 - Pythonで実装
   - サーバサイドは、FastAPIのフレームワークを利用
 
-- API認証方式
-  - APIキー認証
+## 認証方式
 
-- 管理画面認証方式
-  - ID、パスワードによるログイン認証
-  - ID、パスワードは、JSONファイルで管理とし、複数ユーザ管理できる
-  - ログインセッションのタイムアウトは環境変数で設定とする
-  - ログインするとダッシュボードの右上にIDを表示
-  - ログアウトボタンでログアウトする
+### 管理画面認証
+- Microsoft Entra ID（旧Azure AD）による認証
+- JWTトークンを使用したセッション管理
+- ログインセッションのタイムアウトは環境変数で設定
+- ログインするとダッシュボードの右上にユーザー情報を表示
+- ログアウトボタンでログアウトする
+
+### API認証
+- JWTトークンによる認証
+- WebSocket接続もJWTトークンを使用
+- トークンの有効期限は環境変数で設定
 
 ## メッセージ仕様
 
@@ -202,12 +193,16 @@ docker-compose down
   - WEBSITES_PORT = 8000
   - CABOT_DASHBOARD_LOG_LEVEL=INFO
   - CABOT_DASHBOARD_LOG_TO_FILE=false
-  - CABOT_DASHBOARD_API_KEY=[api key]
+  - CABOT_DASHBOARD_JWT_SECRET_KEY=[jwt secret key]  # JWT署名用の秘密鍵
+  - CABOT_DASHBOARD_ACCESS_TOKEN_EXPIRE_MINUTES=30  # JWTトークンの有効期限（分）
   - CABOT_DASHBOARD_SESSION_TIMEOUT=1800
   - CABOT_DASHBOARD_MAX_ROBOTS=20 # Maximum number of connected robots
   - CABOT_DASHBOARD_POLL_TIMEOUT=30 # Timeout period (seconds)
   - CABOT_DASHBOARD_DEBUG_MODE=false
   - CABOT_DASHBOARD_ALLOWED_CABOT_IDS
+  - MICROSOFT_CLIENT_ID=[client id]  # Microsoft Entra IDのクライアントID
+  - MICROSOFT_CLIENT_SECRET=[client secret]  # Microsoft Entra IDのクライアントシークレット
+  - MICROSOFT_TENANT_ID=[tenant id]  # Microsoft Entra IDのテナントID
 
   - ~~ WEBSITES_WEBSOCKETS_ENABLED = 1 ~~
   - https://learn.microsoft.com/ja-jp/azure/app-service/reference-app-settings?source=recommendations&tabs=kudu%2Cdotnet
@@ -219,7 +214,7 @@ docker-compose down
 - ロボット側で Azure Container Registry から pull
 - 環境変数
   - CABOT_DASHBOARD_SERVER_URL=[URL]
-  - CABOT_DASHBOARD_API_KEY=[api key]
+  - CABOT_DASHBOARD_JWT_TOKEN=[jwt token]  # サーバーから発行されたJWTトークン
   - CABOT_DASHBOARD_LOG_LEVEL=INFO
   - CABOT_DASHBOARD_LOG_TO_FILE=false
   - CABOT_DASHBOARD_POLLING_INTERVAL=1

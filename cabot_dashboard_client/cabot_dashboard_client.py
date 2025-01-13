@@ -23,9 +23,9 @@ class Config:
     polling_interval: int
     client_id: str
     client_secret: str
+    debug_mode: bool
     token: Optional[str] = None
     token_type: Optional[str] = None
-    debug_mode: bool
 
     @classmethod
     def from_env(cls) -> 'Config':
@@ -163,9 +163,11 @@ class CabotDashboardClient:
         try:
             async with aiohttp.ClientSession() as session:
                 data = {
-                    'grant_type': 'client_credentials',
+                    'grant_type': 'password',
                     'client_id': self.config.client_id,
                     'client_secret': self.config.client_secret,
+                    'username': self.config.client_id,
+                    'password': self.config.client_secret
                 }
                 
                 self.logger.debug(f"Requesting token from {self.config.server_url}/oauth/token")
@@ -216,7 +218,6 @@ class CabotDashboardClient:
                     async with session.request(method, url, json=data, headers=headers) as retry_response:
                         return retry_response.status, await retry_response.json() if retry_response.status == 200 else None
                 return response.status, await response.json() if response.status == 200 else None
-              return response.status, response_data
         except Exception as e:
             self.logger.error(f"Request error: {str(e)}")
             return None, None

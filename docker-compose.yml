@@ -1,12 +1,14 @@
+version: "3"
 services:
   server:
-    build: ./cabot_dashboard_server
+    build:
+      context: ./cabot_dashboard_server
+      dockerfile: Dockerfile
     ports:
       - "8000:8000"
     environment:
       - CABOT_DASHBOARD_LOG_LEVEL
       - CABOT_DASHBOARD_LOG_TO_FILE
-      - CABOT_DASHBOARD_API_KEY
       - CABOT_DASHBOARD_SESSION_TIMEOUT
       - CABOT_DASHBOARD_SESSION_SECRET
       - CABOT_DASHBOARD_MAX_ROBOTS
@@ -19,6 +21,7 @@ services:
       - CABOT_DASHBOARD_MICROSOFT_CLIENT_ID
       - CABOT_DASHBOARD_MICROSOFT_CLIENT_SECRET
       - CABOT_DASHBOARD_MICROSOFT_TENANT_ID
+      - CABOT_DASHBOARD_CLIENTS
     logging:
       driver: "json-file"
       options:

@@ -24,11 +24,22 @@ async def dashboard_page(
     robot_manager: RobotStateManager = Depends(get_robot_state_manager)
 ):
     try:
-        if not session_token or not await auth_service.validate_token(session_token):
+        logger.info(f"Accessing dashboard with session_token: {session_token[:10] if session_token else 'None'}...")
+        
+        if not session_token:
+            logger.warning("No session token provided")
+            return RedirectResponse(url="/login", status_code=303)
+            
+        is_valid = await auth_service.validate_token(session_token)
+        logger.info(f"Token validation result: {is_valid}")
+        
+        if not is_valid:
+            logger.warning("Invalid or expired token")
             return RedirectResponse(url="/login", status_code=303)
 
         user = await auth_service.get_current_user_from_token(session_token)
         if not user:
+            logger.warning("User not found from token")
             return RedirectResponse(url="/login", status_code=303)
 
         docker_versions = docker_hub_service.get_all_cached_data()
@@ -39,15 +50,15 @@ async def dashboard_page(
                 "request": request,
                 "base_url": request.base_url,
                 "debug_mode": settings.debug_mode,
-                "user": "user1",  # TODO: Temporary solution - needs to be replaced with proper user management
+                "user": user.username,
                 "docker_versions": docker_versions,
                 "robots": robots,
                 "total_robots": len(robots)
             }
         )
-    except ValueError as ve:
-        logger.error(f"ValueError in dashboard_page: {str(ve)}")
-        return RedirectResponse(url="/login")
+    except Exception as e:
+        logger.error(f"Error in dashboard_page: {str(e)}")
+        return RedirectResponse(url="/login", status_code=303)
 
 @router.get("/receive")
 async def receive_updates(
@@ -75,28 +86,39 @@ async def send_command(
     command: Dict,
     session_token: str = Cookie(None),
     auth_service: AuthService = Depends(get_auth_service),
+    robot_manager: RobotStateManager = Depends(get_robot_state_manager),
+    command_queue_manager: CommandQueueManager = Depends(get_command_queue_manager)
+):
+    if not session_token or not await auth_service.validate_token(session_token):
+        raise HTTPException(status_code=403, detail="Invalid session")
+
+    if robot_id not in robot_manager.connected_cabots:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Robot {robot_id} is not connected"
+        )
+
+    await command_queue_manager.initialize_client(robot_id)
+    await command_queue_manager.add_command(robot_id, command)
+    logger.info(f"Command sent to {robot_id}: {command}")
+    return {"status": "success"}
 
 @router.websocket("/ws")
 async def websocket_endpoint(
     websocket: WebSocket,
     robot_manager: RobotStateManager = Depends(get_robot_state_manager),
-    command_queue_manager: CommandQueueManager = Depends(get_command_queue_manager)
+    command_queue_manager: CommandQueueManager = Depends(get_command_queue_manager),
+    auth_service: AuthService = Depends(get_auth_service)
 ):
-    await websocket_manager.connect(websocket)
     try:
-        if not session_token or not await auth_service.validate_token(session_token):
-            raise HTTPException(status_code=403, detail="Invalid session")
+        # Get token from query parameters
+        token = websocket.query_params.get("token")
+        if not token or not await auth_service.validate_token(token):
+            await websocket.close(code=4001)  # Unauthorized
+            return
 
-        if robot_id not in robot_manager.connected_cabots:
-            raise HTTPException(
-                status_code=404,
-                detail=f"Robot {robot_id} is not connected"
-            )
-
-        await command_queue_manager.initialize_client(robot_id)
-        await command_queue_manager.add_command(robot_id, command)
-        logger.info(f"Command sent to {robot_id}: {command}")
-
+        await websocket_manager.connect(websocket)
+        
         # Send initial robot state
         cabot_list = robot_manager.get_connected_cabots_list()
         await websocket_manager.broadcast({
@@ -146,7 +168,12 @@ async def websocket_endpoint(
                 response = await websocket_manager.handle_update_image_name(data)
                 await websocket.send_json(response)
     except WebSocketDisconnect:
-        websocket_manager.disconnect(websocket)
+        logger.info("WebSocket disconnected")
     except Exception as e:
         logger.error(f"WebSocket error: {str(e)}")
-        websocket_manager.disconnect(websocket)
+    finally:
+        try:
+            if websocket in websocket_manager.active_connections:
+                websocket_manager.disconnect(websocket)
+        except Exception as e:
+            logger.error(f"Error during websocket cleanup: {str(e)}")
