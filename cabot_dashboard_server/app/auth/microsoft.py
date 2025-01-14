@@ -6,6 +6,7 @@ from msal import ConfidentialClientApplication
 from app.config import settings
 from app.services.auth import AuthService
 import httpx
+from datetime import datetime, timedelta
 
 router = APIRouter(prefix="/auth/microsoft", tags=["auth"])
 
@@ -29,6 +30,9 @@ async def microsoft_signin(request: Request):
     try:
         redirect_uri = get_base_url(request) + "/auth/microsoft/callback"
         logging.info(f"Starting signin process with redirect_uri: {redirect_uri}")
+        logging.info(f"Using tenant ID: {settings.microsoft_tenant_id}")
+        logging.info(f"Using client ID: {settings.microsoft_client_id}")
+        
         auth_url = (
             f"https://login.microsoftonline.com/{settings.microsoft_tenant_id}/oauth2/v2.0/authorize?"
             f"client_id={settings.microsoft_client_id}&"
@@ -42,6 +46,9 @@ async def microsoft_signin(request: Request):
         return RedirectResponse(auth_url)
     except Exception as e:
         logging.error(f"Error in signin: {str(e)}")
+        # Tenant related errors should be redirected to login with specific error message
+        if "AADSTS50020" in str(e):
+            return RedirectResponse(url="/login?error=tenant_access_denied")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/callback")
@@ -70,15 +77,31 @@ async def microsoft_callback(
             return RedirectResponse(url="/login?error=no_email")
         logging.info(f"Creating session for user: {email}")
         auth_service.register_microsoft_user(email)
-        session_token = auth_service.create_session(email)
+        
+        # Create JWT token instead of session token
+        access_token = auth_service.create_access_token(
+            data={"sub": email},
+            expires_delta=timedelta(minutes=settings.access_token_expire_minutes)
+        )
+        
+        # Calculate cookie expiration
+        max_age = settings.access_token_expire_minutes * 60  # Convert minutes to seconds
+        expires = datetime.utcnow() + timedelta(minutes=settings.access_token_expire_minutes)
+        
         response = RedirectResponse(url="/dashboard")
         response.set_cookie(
             key="session_token",
-            value=session_token,
-            httponly=True,
-            secure=settings.use_secure_cookies, 
-            samesite="lax"
+            value=access_token,
+            max_age=max_age,
+            expires=expires,
+            domain=None,
+            httponly=False,  # Allow JavaScript access for WebSocket
+            secure=False,  # Development environment uses HTTP
+            samesite="lax",
+            path="/"
         )
+        
+        logging.info(f"Setting JWT token cookie for Microsoft user: {email}")
         return response
     except Exception as e:
         error_msg = f"Callback processing error: {str(e)}"

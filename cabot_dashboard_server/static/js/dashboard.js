@@ -4,54 +4,270 @@ let isConnected = false;
 let selectedRobots = new Set();
 let currentFilter = 'all';
 let robotStateManager = null;
-let totalRobots = 0;  // Add total robots counter
+let totalRobots = 0;
+let reconnectAttempts = 0;
+let connectionTimeout = null;
+const MAX_RECONNECT_ATTEMPTS = 3;
+const CONNECTION_TIMEOUT_MS = 10000; // 10 seconds
 
 // Dialog related variables
 let currentAction = null;
 const PLACEHOLDER_TEXT = '+ Click here to set Docker image name';
 
+// Initialize when the page loads
+document.addEventListener('DOMContentLoaded', () => {
+    console.log('Page loaded, initializing dashboard...');
+    
+    // Initialize RobotStateManager first
+    if (window.RobotStateManager) {
+        robotStateManager = new window.RobotStateManager();
+    }
+
+    // Initialize UI elements
+    initializeUI();
+
+    // Initialize WebSocket with a delay to ensure all components are ready
+    console.log('Scheduling WebSocket initialization...');
+    setTimeout(() => {
+        console.log('Starting WebSocket initialization...');
+        initWebSocket();
+    }, 1000);
+});
+
+// Initialize UI elements
+function initializeUI() {
+    console.log('Initializing UI elements...');
+    
+    // Add select all handler
+    const selectAllCheckbox = document.getElementById('select-all');
+    if (selectAllCheckbox) {
+        selectAllCheckbox.addEventListener('change', (e) => {
+            toggleAllRobots(e.target.checked);
+        });
+    }
+
+    // Add event listener for view history buttons
+    document.addEventListener('click', (e) => {
+        if (e.target.closest('.view-history-btn')) {
+            const button = e.target.closest('.view-history-btn');
+            const robotId = button.dataset.robotId;
+            const messages = JSON.parse(button.dataset.messages);
+            showLogDialog(robotId, messages);
+        }
+    });
+
+    // Add dialog event handlers
+    const confirmButton = document.getElementById('confirmAction');
+    const cancelButton = document.getElementById('cancelAction');
+    const dialog = document.getElementById('confirmDialog');
+    const dialogOverlay = document.getElementById('dialogOverlay');
+
+    if (confirmButton) {
+        confirmButton.addEventListener('click', executeAction);
+    }
+
+    if (cancelButton) {
+        cancelButton.addEventListener('click', closeDialog);
+    }
+
+    // Add escape key handler for dialog
+    document.addEventListener('keydown', (event) => {
+        if (event.key === 'Escape' && dialog && dialog.style.display === 'block') {
+            closeDialog();
+        }
+    });
+
+    // Add click outside dialog handler
+    if (dialogOverlay) {
+        dialogOverlay.addEventListener('click', (event) => {
+            if (event.target === dialogOverlay) {
+                closeDialog();
+            }
+        });
+    }
+
+    // Initialize Docker Hub version items
+    initializeDockerVersions();
+}
+
 // Initialize WebSocket connection
 function initWebSocket() {
-    ws = new WebSocket(`ws://${window.location.host}/ws`);
+    console.log('Initializing WebSocket connection...');
     
-    ws.onopen = () => {
-        isConnected = true;
-        updateConnectionStatus();
-    };
+    // Get JWT token from cookie
+    const token = getCookie('session_token');
+    if (!token) {
+        console.error('No authentication token found in cookies');
+        // Wait a bit before redirecting, in case the cookie is not yet set
+        setTimeout(() => {
+            if (!getCookie('session_token')) {
+                console.error('Still no token found after delay, redirecting to login');
+                redirectToLogin();
+            }
+        }, 2000);
+        return;
+    }
+
+    // Clear any existing connection timeout
+    if (connectionTimeout) {
+        clearTimeout(connectionTimeout);
+    }
+
+    // Set new connection timeout
+    connectionTimeout = setTimeout(() => {
+        if (!isConnected) {
+            console.error('Connection timeout reached');
+            handleConnectionFailure();
+        }
+    }, CONNECTION_TIMEOUT_MS);
+
+    // Close existing connection if any
+    if (ws) {
+        console.log('Closing existing WebSocket connection...');
+        try {
+            ws.close();
+            ws = null;
+        } catch (error) {
+            console.error('Error closing existing connection:', error);
+        }
+    }
+
+    const wsProtocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${wsProtocol}//${window.location.host}/ws?token=${token}`;
     
-    ws.onclose = () => {
+    try {
+        console.log('Creating new WebSocket connection...');
+        ws = new WebSocket(wsUrl);
+        
+        ws.onopen = () => {
+            console.log('WebSocket connection established successfully');
+            clearTimeout(connectionTimeout);
+            connectionTimeout = null;
+            isConnected = true;
+            reconnectAttempts = 0;
+            updateConnectionStatus();
+            // Request initial state
+            console.log('Requesting initial state...');
+            ws.send(JSON.stringify({ type: 'refresh' }));
+        };
+        
+        ws.onclose = (event) => {
+            console.log(`WebSocket connection closed with code: ${event.code}`);
+            isConnected = false;
+            updateConnectionStatus();
+            
+            if (event.code === 4001) {
+                console.error('WebSocket authentication failed');
+                handleConnectionFailure();
+                return;
+            }
+            
+            handleConnectionFailure();
+        };
+        
+        ws.onerror = (error) => {
+            console.error('WebSocket error occurred:', error);
+            isConnected = false;
+            updateConnectionStatus();
+        };
+        
+        ws.onmessage = (event) => {
+            try {
+                const data = JSON.parse(event.data);
+                console.log('Received WebSocket message of type:', data.type);
+
+                switch (data.type) {
+                    case 'robot_state':
+                        if (data.cabots) {
+                            updateDashboard(data);
+                        }
+                        if (data.messages) {
+                            updateMessageList(data.messages);
+                        }
+                        break;
+                    case 'refresh_tags_response':
+                        handleTagsResponse(data);
+                        break;
+                    case 'update_image_name_response':
+                        handleImageNameResponse(data);
+                        break;
+                    case 'update_software_response':
+                        handleSoftwareUpdateResponse(data);
+                        break;
+                }
+            } catch (error) {
+                console.error('Error processing WebSocket message:', error);
+            }
+        };
+    } catch (error) {
+        console.error('Error creating WebSocket connection:', error);
         isConnected = false;
         updateConnectionStatus();
-        setTimeout(initWebSocket, 5000);
-    };
-    
-    ws.onmessage = (event) => {
-        try {
-            const data = JSON.parse(event.data);
+        handleConnectionFailure();
+    }
+}
 
-            switch (data.type) {
-                case 'robot_state':
-                    if (data.cabots) {
-                        updateDashboard(data);
-                    }
-                    if (data.messages) {
-                        updateMessageList(data.messages);
-                    }
-                    break;
-                case 'refresh_tags_response':
-                    handleTagsResponse(data);
-                    break;
-                case 'update_image_name_response':
-                    handleImageNameResponse(data);
-                    break;
-                case 'update_software_response':
-                    handleSoftwareUpdateResponse(data);
-                    break;
+// Handle connection failure
+function handleConnectionFailure() {
+    if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+        reconnectAttempts++;
+        console.log(`Scheduling reconnect attempt ${reconnectAttempts}/${MAX_RECONNECT_ATTEMPTS}`);
+        setTimeout(() => {
+            if (!isConnected) {
+                console.log('Attempting to reconnect...');
+                initWebSocket();
             }
-        } catch (error) {
-            console.error('WebSocket message processing error:', error);
+        }, 5000);
+    } else {
+        console.error('Max reconnection attempts reached');
+        if (!isConnected) {
+            redirectToLogin();
         }
-    };
+    }
+}
+
+// Helper function to redirect to login
+function redirectToLogin() {
+    // Check if we're not already on the login page to prevent redirect loops
+    if (!window.location.pathname.includes('/login')) {
+        console.log('Redirecting to login page...');
+        window.location.href = '/login';
+    }
+}
+
+// Helper function to get cookie value
+function getCookie(name) {
+    try {
+        console.log('Getting cookie:', name);
+        console.log('All cookies:', document.cookie);
+        
+        const value = `; ${document.cookie}`;
+        const parts = value.split(`; ${name}=`);
+        
+        console.log('Cookie parts:', parts.length);
+        
+        if (parts.length === 2) {
+            const token = parts.pop().split(';').shift();
+            console.log('Found token:', token.substring(0, 10) + '...');
+            return token;
+        }
+        
+        // Try alternative method
+        const cookies = document.cookie.split(';');
+        for (let cookie of cookies) {
+            const [cookieName, cookieValue] = cookie.split('=').map(c => c.trim());
+            if (cookieName === name) {
+                console.log('Found token (alternative method):', cookieValue.substring(0, 10) + '...');
+                return cookieValue;
+            }
+        }
+        
+        console.warn('Token not found in cookies');
+        return null;
+    } catch (error) {
+        console.error('Error getting cookie:', error);
+        return null;
+    }
 }
 
 // Update connection status display
@@ -488,129 +704,6 @@ function handleImageNameResponse(data) {
     }
 }
 
-// Initialize the dashboard
-document.addEventListener('DOMContentLoaded', () => {
-    if (window.RobotStateManager) {
-        robotStateManager = new window.RobotStateManager();
-    }
-    
-    initWebSocket();
-    
-    // Add select all handler
-    const selectAllCheckbox = document.getElementById('select-all');
-    if (selectAllCheckbox) {
-        selectAllCheckbox.addEventListener('change', (e) => {
-            toggleAllRobots(e.target.checked);
-        });
-    }
-
-    // Add event listener for view history buttons
-    document.addEventListener('click', (e) => {
-        if (e.target.closest('.view-history-btn')) {
-            const button = e.target.closest('.view-history-btn');
-            const robotId = button.dataset.robotId;
-            const messages = JSON.parse(button.dataset.messages);
-            showLogDialog(robotId, messages);
-        }
-    });
-    
-    // Add dialog event handlers
-    const confirmButton = document.getElementById('confirmAction');
-    const cancelButton = document.getElementById('cancelAction');
-    const dialog = document.getElementById('confirmDialog');
-    const dialogOverlay = document.getElementById('dialogOverlay');
-    
-    if (confirmButton) {
-        confirmButton.addEventListener('click', executeAction);
-    }
-    
-    if (cancelButton) {
-        cancelButton.addEventListener('click', closeDialog);
-    }
-    
-    // Add escape key handler for dialog
-    document.addEventListener('keydown', (event) => {
-        if (event.key === 'Escape' && dialog && dialog.style.display === 'block') {
-            closeDialog();
-        }
-    });
-    
-    // Add click outside dialog handler
-    if (dialogOverlay) {
-        dialogOverlay.addEventListener('click', (event) => {
-            if (event.target === dialogOverlay) {
-                closeDialog();
-            }
-        });
-    }
-    
-    // Initialize Docker Hub version items
-    const dockerVersions = window.dockerVersions || {};
-    Object.entries(dockerVersions).forEach(([key, image]) => {
-        const versionItem = document.querySelector(`#version-${key}`);
-        if (!versionItem) return;
-
-        // Set image name
-        const nameText = versionItem.querySelector('.version-name-text');
-        const nameInput = versionItem.querySelector('.version-name-input');
-        if (nameText && nameInput) {
-            nameText.textContent = image.name || PLACEHOLDER_TEXT;
-            nameText.classList.toggle('empty-name', !image.name);
-            nameInput.value = image.name || '';
-            nameInput.dataset.original = image.name || '';
-        }
-
-        // Set tags
-        const select = versionItem.querySelector('select');
-        if (select) {
-            select.innerHTML = '';
-            (image.tags || []).forEach(tag => {
-                const option = document.createElement('option');
-                option.value = tag;
-                option.textContent = tag;
-                select.appendChild(option);
-            });
-        }
-
-        // Set last updated
-        const lastUpdated = versionItem.querySelector('.last-updated');
-        if (lastUpdated && image.last_updated) {
-            lastUpdated.textContent = `Last updated: ${formatDateTime(image.last_updated)}`;
-        }
-
-        // Update controls state
-        updateImageControls(key, !!image.name);
-
-        // Add click handlers
-        const nameTextElement = versionItem.querySelector('.version-name-text');
-        if (nameTextElement) {
-            nameTextElement.addEventListener('click', () => {
-                startEdit(nameTextElement);
-            });
-        }
-    });
-
-    // Add CSS for image versions
-    const style = document.createElement('style');
-    style.textContent = `
-        .image-versions {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 4px;
-            margin-left: 1.5rem;
-        }
-        .version-tag {
-            background-color: #f8f9fa;
-            border: 1px solid #dee2e6;
-            border-radius: 4px;
-            padding: 3px 8px;
-            font-size: 1.125rem;
-            color: #495057;
-        }
-    `;
-    document.head.appendChild(style);
-});
-
 // Update image controls visibility and state
 function updateImageControls(imageId, hasImageName) {
     const versionItem = document.querySelector(`#version-${imageId}`);
@@ -632,97 +725,54 @@ function updateImageControls(imageId, hasImageName) {
 // Start editing image name
 function startEdit(element) {
     const versionItem = element.closest('.version-item');
-    const textElement = versionItem.querySelector('.version-name-text');
-    const inputElement = versionItem.querySelector('.version-name-input');
-    
-    // Get current text
-    const currentText = textElement.textContent.trim();
-    inputElement.value = currentText === PLACEHOLDER_TEXT ? '' : currentText;
-    
-    // Toggle display
-    textElement.style.display = 'none';
-    inputElement.style.display = 'block';
-    inputElement.focus();
-    
-    if (inputElement.value) {
-        inputElement.select();
-    }
+    if (!versionItem) return;
 
-    // Add event listeners
-    function handleBlur() {
-        finishEdit(inputElement);
-        inputElement.removeEventListener('blur', handleBlur);
-        inputElement.removeEventListener('keypress', handleKeyPress);
-        inputElement.removeEventListener('keydown', handleKeyDown);
-    }
-
-    function handleKeyPress(e) {
-        if (e.key === 'Enter') {
-            e.preventDefault();
-            finishEdit(inputElement);
-            inputElement.removeEventListener('blur', handleBlur);
-            inputElement.removeEventListener('keypress', handleKeyPress);
-            inputElement.removeEventListener('keydown', handleKeyDown);
+    const nameInput = versionItem.querySelector('.version-name-input');
+    const nameText = versionItem.querySelector('.version-name-text');
+    
+    if (nameInput && nameText) {
+        nameText.style.display = 'none';
+        nameInput.style.display = 'block';
+        nameInput.focus();
+        
+        // Add blur event listener if not already added
+        if (!nameInput.dataset.hasBlurListener) {
+            nameInput.addEventListener('blur', () => {
+                const newName = nameInput.value.trim();
+                const originalName = nameInput.dataset.original;
+                
+                if (newName !== originalName) {
+                    // Get image ID from version item ID
+                    const imageId = versionItem.id.replace('version-', '');
+                    updateImageName(imageId, newName);
+                } else {
+                    // If no change, just hide input and show text
+                    nameInput.style.display = 'none';
+                    nameText.style.display = 'block';
+                }
+            });
+            nameInput.dataset.hasBlurListener = 'true';
         }
     }
-
-    function handleKeyDown(e) {
-        if (e.key === 'Escape') {
-            e.preventDefault();
-            textElement.style.display = 'block';
-            inputElement.style.display = 'none';
-            inputElement.removeEventListener('blur', handleBlur);
-            inputElement.removeEventListener('keypress', handleKeyPress);
-            inputElement.removeEventListener('keydown', handleKeyDown);
-        }
-    }
-
-    inputElement.addEventListener('blur', handleBlur);
-    inputElement.addEventListener('keypress', handleKeyPress);
-    inputElement.addEventListener('keydown', handleKeyDown);
 }
 
-// Finish editing image name
-async function finishEdit(input) {
-    const versionItem = input.closest('.version-item');
-    const imageId = input.dataset.imageId;
-    const textElement = versionItem.querySelector('.version-name-text');
-    const errorDiv = versionItem.querySelector('.error-message');
-    const newName = input.value.trim();
-    
-    errorDiv.textContent = '';
-    
-    if (newName === '') {
-        textElement.textContent = PLACEHOLDER_TEXT;
-        textElement.classList.add('empty-name');
-        updateImageControls(imageId, false);
-        textElement.style.display = 'block';
-        input.style.display = 'none';
+// Update image name
+function updateImageName(imageId, newName) {
+    if (!ws || !isConnected) {
+        console.error('WebSocket not connected');
         return;
     }
 
-    try {
-        ws.send(JSON.stringify({
-            type: 'update_image_name',
-            image_id: imageId,
-            image_name: newName
-        }));
+    const message = {
+        type: 'update_image_name',
+        image_id: imageId,
+        image_name: newName
+    };
 
-        textElement.textContent = newName;
-        textElement.classList.remove('empty-name');
-        updateImageControls(imageId, true);
-        input.dataset.original = newName;
+    try {
+        ws.send(JSON.stringify(message));
     } catch (error) {
-        console.error('Failed to update image name:', error);
-        errorDiv.textContent = error.message || 'Failed to update image name';
-        textElement.textContent = input.dataset.original || PLACEHOLDER_TEXT;
-        if (!input.dataset.original) {
-            textElement.classList.add('empty-name');
-            updateImageControls(imageId, false);
-        }
-    } finally {
-        textElement.style.display = 'block';
-        input.style.display = 'none';
+        console.error('Error sending update image name message:', error);
     }
 }
 
@@ -1051,4 +1101,69 @@ function showLogDialogFromButton(button) {
     const robotId = button.dataset.robotId;
     const messages = JSON.parse(button.dataset.messages);
     showLogDialog(robotId, messages);
+}
+
+// Initialize Docker Hub version items
+function initializeDockerVersions() {
+    console.log('Initializing Docker Hub versions...');
+    
+    // Initialize Docker Hub version items
+    const dockerVersions = window.dockerVersions || {};
+    Object.entries(dockerVersions).forEach(([key, image]) => {
+        const versionItem = document.querySelector(`#version-${key}`);
+        if (!versionItem) {
+            console.log(`Version item not found for key: ${key}`);
+            return;
+        }
+
+        // Set image name
+        const nameText = versionItem.querySelector('.version-name-text');
+        const nameInput = versionItem.querySelector('.version-name-input');
+        if (nameText && nameInput) {
+            nameText.textContent = image.name || PLACEHOLDER_TEXT;
+            nameText.classList.toggle('empty-name', !image.name);
+            nameInput.value = image.name || '';
+            nameInput.dataset.original = image.name || '';
+        }
+
+        // Set tags
+        const select = versionItem.querySelector('select');
+        if (select) {
+            select.innerHTML = '';
+            (image.tags || []).forEach(tag => {
+                const option = document.createElement('option');
+                option.value = tag;
+                option.textContent = tag;
+                select.appendChild(option);
+            });
+        }
+
+        // Set last updated
+        const lastUpdated = versionItem.querySelector('.last-updated');
+        if (lastUpdated && image.last_updated) {
+            lastUpdated.textContent = `Last updated: ${formatDateTime(image.last_updated)}`;
+        }
+
+        // Update controls state
+        updateImageControls(key, !!image.name);
+
+        // Add click handlers
+        const nameTextElement = versionItem.querySelector('.version-name-text');
+        if (nameTextElement) {
+            nameTextElement.addEventListener('click', () => {
+                startEdit(nameTextElement);
+            });
+        }
+    });
+}
+
+// Format date time
+function formatDateTime(dateString) {
+    try {
+        const date = new Date(dateString);
+        return date.toLocaleString();
+    } catch (error) {
+        console.error('Error formatting date:', error);
+        return dateString;
+    }
 }

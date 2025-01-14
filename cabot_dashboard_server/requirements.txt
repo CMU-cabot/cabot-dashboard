@@ -9,6 +9,8 @@ bcrypt==3.2.0
 python-multipart==0.0.6
 aiohttp==3.8.4
 aiofiles==23.2.1
+python-jose[cryptography]
+passlib[bcrypt]
 pytz==2023.3
 msal==1.25.0
 httpx==0.26.0

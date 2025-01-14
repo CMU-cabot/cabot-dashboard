@@ -9,15 +9,38 @@ class ConnectionManager:
         self.docker_hub_service = DockerHubService()
 
     async def connect(self, websocket: WebSocket):
-        await websocket.accept()
-        self.active_connections.append(websocket)
+        try:
+            await websocket.accept()
+            if websocket not in self.active_connections:
+                self.active_connections.append(websocket)
+                logger.info("New WebSocket connection established")
+        except Exception as e:
+            logger.error(f"Error during WebSocket connection: {str(e)}")
+            try:
+                await websocket.close()
+            except:
+                pass
 
     def disconnect(self, websocket: WebSocket):
-        self.active_connections.remove(websocket)
+        try:
+            if websocket in self.active_connections:
+                self.active_connections.remove(websocket)
+                logger.info("WebSocket connection removed")
+        except Exception as e:
+            logger.error(f"Error during WebSocket disconnection: {str(e)}")
 
     async def broadcast(self, message: dict):
+        disconnected = []
         for connection in self.active_connections:
-            await connection.send_json(message)
+            try:
+                await connection.send_json(message)
+            except Exception as e:
+                logger.error(f"Error broadcasting message: {str(e)}")
+                disconnected.append(connection)
+
+        # Clean up disconnected connections
+        for connection in disconnected:
+            self.disconnect(connection)
 
     async def handle_refresh_tags(self, data: dict) -> dict:
         try:

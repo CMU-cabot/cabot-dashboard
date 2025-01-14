@@ -21,7 +21,11 @@ class Config:
     max_retries: int
     retry_delay: int
     polling_interval: int
+    client_id: str
+    client_secret: str
     debug_mode: bool
+    token: Optional[str] = None
+    token_type: Optional[str] = None
 
     @classmethod
     def from_env(cls) -> 'Config':
@@ -35,6 +39,8 @@ class Config:
             max_retries=int(os.environ.get("CABOT_DASHBOARD_MAX_RETRIES", "5")),
             retry_delay=int(os.environ.get("CABOT_DASHBOARD_RETRY_DELAY", "5")),
             polling_interval=int(os.environ.get("CABOT_DASHBOARD_POLLING_INTERVAL", "1")),
+            client_id=os.environ.get("CABOT_DASHBOARD_CLIENT_ID"),
+            client_secret=os.environ.get("CABOT_DASHBOARD_CLIENT_SECRET"),
             debug_mode=os.environ.get('CABOT_DASHBOARD_DEBUG_MODE', 'false').lower() == 'true'
         )
 
@@ -128,6 +134,12 @@ def setup_logger(config: Config) -> logging.Logger:
     handler = logging.FileHandler(config.log_file) if config.log_to_file else logging.StreamHandler()
     handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s', '%Y-%m-%d %H:%M:%S'))
     logger.addHandler(handler)
+    
+    logger.debug("Logger initialized with:")
+    logger.debug(f"- Log level: {config.log_level}")
+    logger.debug(f"- Server URL: {config.server_url}")
+    logger.debug(f"- API Key: {config.api_key[:4]}..." if config.api_key else "- API Key: Not set")
+    
     return logger
 
 class CabotDashboardClient:
@@ -135,6 +147,8 @@ class CabotDashboardClient:
         self.cabot_id = cabot_id
         self.config = Config.from_env()
         self.logger = setup_logger(self.config)
+        self.auth_retry_count = 0
+        self.MAX_AUTH_RETRIES = 3
         self.system_command = SystemCommand(cabot_id, self.config.debug_mode)
         self._command_handlers = {
             CommandType.ROS_START: ['systemctl', '--user', 'start', 'cabot'],
@@ -145,19 +159,67 @@ class CabotDashboardClient:
             CommandType.DEBUG2: ['sudo', 'systemctl', 'restart', 'cron']
         }
 
+    async def _get_token(self) -> None:
+        try:
+            async with aiohttp.ClientSession() as session:
+                data = {
+                    'grant_type': 'password',
+                    'client_id': self.config.client_id,
+                    'client_secret': self.config.client_secret,
+                    'username': self.config.client_id,
+                    'password': self.config.client_secret
+                }
+                
+                self.logger.debug(f"Requesting token from {self.config.server_url}/oauth/token")
+                self.logger.debug(f"Client ID: {self.config.client_id}")
+                
+                async with session.post(
+                    f"{self.config.server_url}/oauth/token",
+                    data=data,
+                    headers={"Content-Type": "application/x-www-form-urlencoded"}
+                ) as response:
+                    if response.status == 200:
+                        token_data = await response.json()
+                        self.config.token = token_data['access_token']
+                        self.config.token_type = token_data['token_type']
+                        self.logger.debug("Token obtained successfully")
+                    else:
+                        response_text = await response.text()
+                        self.logger.error(f"Failed to get token. Status: {response.status}, Response: {response_text}")
+                        raise Exception(f"Failed to get access token: {response_text}")
+        except Exception as e:
+            self.logger.error(f"Token request failed: {str(e)}")
+            raise
+
     async def _make_request(self, session: aiohttp.ClientSession, method: str, endpoint: str, data: Optional[Dict] = None) -> Tuple[Optional[int], Optional[Dict]]:
-        headers = {"X-API-Key": self.config.api_key}
+        if not self.config.token:
+            await self._get_token()
+        
+        if not self.config.api_key:
+            self.logger.error("API key is not configured")
+            return None, None
+            
+        headers = {
+            "Authorization": f"Bearer {self.config.token}",
+            "X-API-Key": self.config.api_key,
+            "Content-Type": "application/json"
+        }
+        
         url = f"{self.config.server_url}/api/client/{endpoint}"
-        self.logger.info(f"Request URL: {url}")
-        self.logger.info(f"Request data: {json.dumps(data, indent=2)}")
+        self.logger.debug(f"Making request to {url} with API key: {self.config.api_key[:4]}...")
+        
         try:
             async with getattr(session, method)(url, headers=headers, json=data) as response:
                 response_data = await response.json() if response.status == 200 else None
-                self.logger.info(f"Response status: {response.status}")
-                self.logger.info(f"Response data: {json.dumps(response_data, indent=2)}")
-                return response.status, response_data
-        except ClientError as e:
-            self.logger.error(f"Request error: {e}")
+                if response.status == 401:
+                    self.logger.warning("Token expired, refreshing...")
+                    await self._get_token()
+                    headers["Authorization"] = f"Bearer {self.config.token}"
+                    async with session.request(method, url, json=data, headers=headers) as retry_response:
+                        return retry_response.status, await retry_response.json() if retry_response.status == 200 else None
+                return response.status, await response.json() if response.status == 200 else None
+        except Exception as e:
+            self.logger.error(f"Request error: {str(e)}")
             return None, None
 
     async def send_status(self, session: aiohttp.ClientSession, status: Union[str, Dict]) -> bool:
