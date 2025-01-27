@@ -1,9 +1,17 @@
-version: "3"
 services:
   server:
+    image: cmucal/cabot-dashboard-server
     build:
       context: ./cabot_dashboard_server
       dockerfile: Dockerfile
+      x-bake:
+        tags:
+          - ${REGISTRY:-cmucal}/cabot-dashboard-server
+        platforms:
+          - linux/arm64
+          - linux/amd64
+        output:
+          - type=registry
     ports:
       - "8000:8000"
     environment:
@@ -29,7 +37,17 @@ services:
         max-file: "10"
 
   client:
-    build: ./cabot_dashboard_client
+    image: cmucal/cabot-dashboard-client
+    build:
+      context: ./cabot_dashboard_client
+      x-bake:
+        tags:
+          - ${REGISTRY:-cmucal}/cabot-dashboard-client
+        platforms:
+          - linux/arm64
+          - linux/amd64
+        output:
+          - type=registry
     volumes:
       #for systemctl
       - /run/systemd/system:/run/systemd/system
