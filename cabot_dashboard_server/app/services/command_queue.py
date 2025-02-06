@@ -29,9 +29,9 @@ class CommandQueueManager:
     async def wait_for_update(self, client_id: str) -> Dict:
         if client_id not in self.command_queues:
             await self.initialize_client(client_id)
+        await self.command_queues[client_id].put(None)
         logger.debug(f"[WAIT] Starting wait for {client_id}")
         self.command_events[client_id].clear()
-        await self.command_queues[client_id].put(None)
         logger.debug(f"[WAIT] Event cleared for {client_id}")
         try:
             await asyncio.wait_for(
