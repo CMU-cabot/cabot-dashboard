@@ -247,8 +247,8 @@ class CabotDashboardClient:
         return False
 
     async def handle_command(self, session: aiohttp.ClientSession, command: Dict[str, Any]) -> None:
-        command_type = command.get('command')
         self.logger.info(f"Received command: {command}")
+        command_type = command.get('command')
         
         try:
             cmd_type = CommandType(command_type)
