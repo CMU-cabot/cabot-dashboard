@@ -31,6 +31,7 @@ class CommandQueueManager:
             await self.initialize_client(client_id)
         logger.debug(f"[WAIT] Starting wait for {client_id}")
         self.command_events[client_id].clear()
+        await self.command_queues[client_id].put(None)
         logger.debug(f"[WAIT] Event cleared for {client_id}")
         try:
             await asyncio.wait_for(

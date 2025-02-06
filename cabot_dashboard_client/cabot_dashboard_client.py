@@ -293,7 +293,7 @@ class CabotDashboardClient:
                 })
                 # Get docker images tags
                 self.logger.info("Executing docker images command")
-                success, output = await self.system_command.execute(['docker', 'images', '--format', '{{.Repository}}:{{.Tag}}'], cmd_type)
+                success, output = await self.system_command.execute(['sudo', 'docker', 'images', '--format', '{{.Repository}}:{{.Tag}}'], cmd_type)
                 self.logger.info(f"Docker images command result - success: {success}, output: {output}")
                 
                 # Parse the output and create a dictionary of image:tag pairs
