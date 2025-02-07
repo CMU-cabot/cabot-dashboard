@@ -46,7 +46,7 @@ class CommandQueueManager:
                 logger.error(f"Error in wait_for_update: {e}")
                 raise ConnectionError(f"Client {client_id} connection error: {e}")
             if self.command_requests[client_id] != request_id:
-                raise ConnectionError(f"Client {client_id} request {request_id} closed")
+                raise ConnectionResetError(f"Client {client_id} request {request_id} closed")
             if time.time() - started > self.POLL_TIMEOUT:
                 logger.debug(f"[WAIT] Timeout for {client_id} after {self.POLL_TIMEOUT}s")
                 raise asyncio.TimeoutError(f"Client {client_id} request {request_id} timeout")

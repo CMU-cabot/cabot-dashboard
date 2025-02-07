@@ -64,6 +64,7 @@ async def poll(
     if client_id not in robot_manager.connected_cabots:
         logger.warning(f"Poll attempted for disconnected client {client_id}")
         raise HTTPException(status_code=404, detail="Robot not connected")
+    skip_update_state = False
     try:
         body = await request.json()
         system_status = body.get("cabot_system_status", "unknown")
@@ -79,10 +80,15 @@ async def poll(
         return result
     except asyncio.TimeoutError:
         return Response(status_code=204)
+    except ConnectionResetError:
+        skip_update_state = True
+        return Response(status_code=204)
     except Exception as e:
         logger.error(f"Error in poll for {client_id}: {e}")
         raise HTTPException(status_code=500, detail=str(e))
     finally:
+        if skip_update_state:
+            return
         state = {
             "status": "disconnected",
             "system_status": "unknown"
