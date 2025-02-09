@@ -72,6 +72,8 @@ services:
       - CABOT_DASHBOARD_CLIENT_SECRET
       - CABOT_DASHBOARD_DEBUG_MODE
       - CABOT_DASHBOARD_DEBUG_STATUS
+      - CABOT_DASHBOARD_USER_NAME
+      - CABOT_DASHBOARD_ID_FILE
     network_mode: host
     extra_hosts:
       - "host_addr:host-gateway"
