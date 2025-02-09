@@ -73,6 +73,8 @@ services:
       - CABOT_DASHBOARD_DEBUG_MODE
       - CABOT_DASHBOARD_DEBUG_STATUS
     network_mode: host
+    extra_hosts:
+      - "host_addr:host-gateway"
     logging:
       driver: "json-file"
       options:
