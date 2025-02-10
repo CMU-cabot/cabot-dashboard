@@ -58,6 +58,8 @@ services:
       - /usr/bin/docker:/usr/bin/docker
       - /usr/local/bin/docker-compose:/usr/local/bin/docker-compose
       - /var/run/docker.sock:/var/run/docker.sock
+      # for ssh
+      - ${PWD}/id_cabot:/var/id_cabot
     #required fo systemctl
     privileged: true
     environment:
@@ -72,10 +74,12 @@ services:
       - CABOT_DASHBOARD_CLIENT_SECRET
       - CABOT_DASHBOARD_DEBUG_MODE
       - CABOT_DASHBOARD_DEBUG_STATUS
+      # for ssh
       - CABOT_DASHBOARD_USER_NAME=$USERNAME
-      - CABOT_DASHBOARD_ID_FILE
+      - CABOT_DASHBOARD_ID_FILE=/var/id_cabot
     network_mode: host
     extra_hosts:
+      # for ssh
       - "host_addr:host-gateway"
     logging:
       driver: "json-file"
