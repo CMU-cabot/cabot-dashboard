@@ -97,9 +97,9 @@ class SystemCommand:
 
             stdout_str = stdout.decode().strip()
             stderr_str = stderr.decode().strip()
-            self.logger.info(f"Command returncode: {process.returncode}")
-            self.logger.info(f"Command stdout: {stdout_str}")
             self.logger.info(f"Command stderr: {stderr_str}")
+            self.logger.info(f"Command stdout: {stdout_str}")
+            self.logger.info(f"Command returncode: {process.returncode}")
 
             if process.returncode == 0:
                 return True, stdout_str
@@ -275,23 +275,12 @@ class CabotDashboardClient:
                 # self.logger.info(f"Docker images command result - success: {success}, output: {output}")
                 
                 # Parse the output and create a dictionary of image:tag pairs
-                image_tags = {}
                 if success and output:
+                    image_tags = {}
                     for line in output.split('\n'):
-                        if line.strip():
-                            try:
-                                repo_tag = line.strip().split(':')
-                                if len(repo_tag) == 2:
-                                    if self.config.debug_mode:
-                                        # In debug mode, use the image name as is
-                                        image_name = repo_tag[0]
-                                    else:
-                                        # In production mode, get the last part of the image name
-                                        image_name = repo_tag[0].split('/')[-1]
-                                    image_tags[image_name] = repo_tag[1]
-                                    # self.logger.info(f"Parsed image tag - name: {image_name}, tag: {repo_tag[1]}")
-                            except Exception as e:
-                                self.logger.error(f"Error parsing image tag line {line}: {e}")
+                        repo_tag = line.strip().split(':')
+                        if len(repo_tag) == 2:
+                            image_tags[repo_tag[0].split('/')[-1]] = repo_tag[1]
                     
                     self.logger.info(f"Final parsed image tags: {image_tags}")
                     # Send the image tags back
