@@ -63,7 +63,8 @@ class SystemCommand:
         self.debug_mode = debug_mode
         self.logger = logging.getLogger(__name__)
         
-    async def execute(self, command: list[str], command_type: Optional[CommandType] = None) -> Tuple[bool, Optional[str]]:
+    async def execute(self, command: list[str]) -> Tuple[bool, Optional[str]]:
+        command_type = CommandType(command[0])
         if self.debug_mode:
             # Debug mode handling based on CommandType
             if command_type == CommandType.GET_IMAGE_TAGS:
@@ -85,6 +86,7 @@ class SystemCommand:
                 return False, debug_status
 
         try:
+            command.insert(0, "./remote-exec.sh")
             self.logger.info(f"Executing command: {' '.join(command)}")
             process = await asyncio.create_subprocess_exec(
                 *command,
@@ -107,23 +109,6 @@ class SystemCommand:
 
         except Exception as e:
             self.logger.error(f"Error executing command: {e}")
-            return False, str(e)
-
-    async def execute_software_update(self, images: list[dict]) -> Tuple[bool, Optional[str]]:
-        try:
-            # Use the existing execute method to run the update command
-            update_command = [
-                'sudo',
-                'systemctl',
-                'start',
-                f'cabot-software-update@{json.dumps(images)}'  # Pass images as a parameter to the service
-            ]
-            
-            self.logger.info(f"Executing software update with images: {images}")
-            return await self.execute(update_command)
-            
-        except Exception as e:
-            self.logger.error(f"Error executing software update: {e}")
             return False, str(e)
 
 def setup_logger(config: Config) -> logging.Logger:
@@ -150,14 +135,6 @@ class CabotDashboardClient:
         self.auth_retry_count = 0
         self.MAX_AUTH_RETRIES = 3
         self.system_command = SystemCommand(cabot_id, self.config.debug_mode)
-        self._command_handlers = {
-            CommandType.ROS_START: ['systemctl', '--user', 'start', 'cabot'],
-            CommandType.ROS_STOP: ['systemctl', '--user', 'stop', 'cabot'],
-            CommandType.SYSTEM_REBOOT: ['sudo', 'systemctl', 'reboot'],
-            CommandType.SYSTEM_POWEROFF: ['sudo', 'systemctl', 'poweroff'],
-            CommandType.DEBUG1: ['systemctl', '--user', 'restart', 'myapp'],
-            CommandType.DEBUG2: ['sudo', 'systemctl', 'restart', 'cron']
-        }
 
     async def _get_token(self) -> None:
         try:
@@ -268,7 +245,8 @@ class CabotDashboardClient:
                     "status": "start",
                     "message": f"Starting software update for {len(images)} images..."
                 })
-                success, error = await self.system_command.execute_software_update(images)
+
+                success, error = await self.execute([command_type, f'cabot-software-update@{json.dumps(images)}'])
                 
                 if success:
                     await self.send_status(session, {
@@ -292,9 +270,9 @@ class CabotDashboardClient:
                     "message": "Getting image tags..."
                 })
                 # Get docker images tags
-                self.logger.info("Executing docker images command")
-                success, output = await self.system_command.execute(['sudo', 'docker', 'images', '--format', '{{.Repository}}:{{.Tag}}'], cmd_type)
-                self.logger.info(f"Docker images command result - success: {success}, output: {output}")
+                # self.logger.info("Executing docker images command")
+                success, output = await self.system_command.execute([command_type])
+                # self.logger.info(f"Docker images command result - success: {success}, output: {output}")
                 
                 # Parse the output and create a dictionary of image:tag pairs
                 image_tags = {}
@@ -311,7 +289,7 @@ class CabotDashboardClient:
                                         # In production mode, get the last part of the image name
                                         image_name = repo_tag[0].split('/')[-1]
                                     image_tags[image_name] = repo_tag[1]
-                                    self.logger.info(f"Parsed image tag - name: {image_name}, tag: {repo_tag[1]}")
+                                    # self.logger.info(f"Parsed image tag - name: {image_name}, tag: {repo_tag[1]}")
                             except Exception as e:
                                 self.logger.error(f"Error parsing image tag line {line}: {e}")
                     
@@ -331,21 +309,13 @@ class CabotDashboardClient:
                     })
                 return
             
-            command_args = self._command_handlers.get(cmd_type)
-            if not command_args:
-                await self.send_status(session, {
-                    "type": "command",
-                    "status": "error",
-                    "message": f"Unknown command type: {command_type}"
-                })
-                return
-
             await self.send_status(session, {
                 "type": "command",
                 "status": "start",
                 "message": f"Executing {command_type}..."
             })
-            success, error = await self.system_command.execute(command_args)
+
+            success, error = await self.system_command.execute([command_type])
 
             if success:
                 await self.send_status(session, {
@@ -374,10 +344,7 @@ class CabotDashboardClient:
             })
 
     async def get_cabot_system_status(self) -> str:
-        success, error = await self.system_command.execute(
-            ['systemctl', '--user', 'is-active', 'cabot'],
-            CommandType.CABOT_IS_ACTIVE
-        )
+        success, error = await self.system_command.execute([CommandType.CABOT_IS_ACTIVE.value])
         if not success:
             if not error:
                 return "unknown"
