@@ -30,12 +30,12 @@ class Config:
     token_type: Optional[str] = None
 
     @classmethod
-    def from_env(cls) -> 'Config':
+    def from_env(cls) -> "Config":
         """Load configuration from environment variables"""
         return cls(
-            log_level=os.environ.get('CABOT_DASHBOARD_LOG_LEVEL', 'INFO'),
-            log_to_file=os.environ.get('CABOT_DASHBOARD_LOG_TO_FILE', 'false').lower() == 'true',
-            log_file=os.environ.get('CABOT_DASHBOARD_LOG_FILE', 'cabot.log'),
+            log_level=os.environ.get("CABOT_DASHBOARD_LOG_LEVEL", "INFO"),
+            log_to_file=os.environ.get("CABOT_DASHBOARD_LOG_TO_FILE", "false").lower() == "true",
+            log_file=os.environ.get("CABOT_DASHBOARD_LOG_FILE", "cabot.log"),
             server_url=os.environ.get("CABOT_DASHBOARD_SERVER_URL", "http://localhost:8000"),
             api_key=os.environ.get("CABOT_DASHBOARD_API_KEY", "your_secret_api_key_here"),
             max_retries=int(os.environ.get("CABOT_DASHBOARD_MAX_RETRIES", "5")),
@@ -43,7 +43,7 @@ class Config:
             polling_interval=int(os.environ.get("CABOT_DASHBOARD_POLLING_INTERVAL", "1")),
             client_id=os.environ.get("CABOT_DASHBOARD_CLIENT_ID"),
             client_secret=os.environ.get("CABOT_DASHBOARD_CLIENT_SECRET"),
-            debug_mode=os.environ.get('CABOT_DASHBOARD_DEBUG_MODE', 'false').lower() == 'true',
+            debug_mode=os.environ.get("CABOT_DASHBOARD_DEBUG_MODE", "false").lower() == "true",
         )
 
 
@@ -85,9 +85,9 @@ class SystemCommand:
                 self.logger.info(f"Debug mode: Generated {num_images} images: {debug_output}")
                 return True, "\n".join(debug_output)
             elif command_type == CommandType.CABOT_IS_ACTIVE:
-                debug_status = os.environ.get('CABOT_DASHBOARD_DEBUG_STATUS', 'active')
+                debug_status = os.environ.get("CABOT_DASHBOARD_DEBUG_STATUS", "active")
                 self.logger.debug(f"Debug mode: Returning status {debug_status}")
-                if debug_status == 'active':
+                if debug_status == "active":
                     return True, None
                 return False, debug_status
 
@@ -120,7 +120,7 @@ def setup_logger(config: Config) -> logging.Logger:
     logger.handlers.clear()
 
     handler = logging.FileHandler(config.log_file) if config.log_to_file else logging.StreamHandler()
-    handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s', '%Y-%m-%d %H:%M:%S'))
+    handler.setFormatter(logging.Formatter("%(asctime)s - %(name)s - %(levelname)s - %(message)s", "%Y-%m-%d %H:%M:%S"))
     logger.addHandler(handler)
 
     logger.debug("Logger initialized with:")
@@ -144,11 +144,11 @@ class CabotDashboardClient:
         try:
             async with aiohttp.ClientSession() as session:
                 data = {
-                    'grant_type': 'password',
-                    'client_id': self.config.client_id,
-                    'client_secret': self.config.client_secret,
-                    'username': self.config.client_id,
-                    'password': self.config.client_secret,
+                    "grant_type": "password",
+                    "client_id": self.config.client_id,
+                    "client_secret": self.config.client_secret,
+                    "username": self.config.client_id,
+                    "password": self.config.client_secret,
                 }
 
                 self.logger.debug(f"Requesting token from {self.config.server_url}/oauth/token")
@@ -161,8 +161,8 @@ class CabotDashboardClient:
                 ) as response:
                     if response.status == 200:
                         token_data = await response.json()
-                        self.config.token = token_data['access_token']
-                        self.config.token_type = token_data['token_type']
+                        self.config.token = token_data["access_token"]
+                        self.config.token_type = token_data["token_type"]
                         self.logger.debug("Token obtained successfully")
                     else:
                         response_text = await response.text()
@@ -205,7 +205,7 @@ class CabotDashboardClient:
 
     async def connect(self, session: aiohttp.ClientSession) -> bool:
         for attempt in range(self.config.max_retries):
-            status_code, _ = await self._make_request(session, 'post', f"connect/{self.cabot_id}")
+            status_code, _ = await self._make_request(session, "post", f"connect/{self.cabot_id}")
             if status_code == 200:
                 return True
             elif status_code == 403:
@@ -215,7 +215,7 @@ class CabotDashboardClient:
 
     async def handle_command(self, session: aiohttp.ClientSession, command: Dict[str, Any]) -> None:
         self.logger.info(f"Received command: {command}")
-        command_type = command.get('command')
+        command_type = command.get("command")
         status_type = "command"
 
         async def send_status(data: Dict) -> bool:
@@ -229,7 +229,7 @@ class CabotDashboardClient:
 
             if cmd_type == CommandType.SOFTWARE_UPDATE:
                 status_type = "software_update"
-                images = command.get('commandOption', {}).get('images', [])
+                images = command.get("commandOption", {}).get("images", [])
                 if not images:
                     await send_status({"status": "error", "message": "No images specified for software update"})
                     return
@@ -252,10 +252,10 @@ class CabotDashboardClient:
                 # Parse the output and create a dictionary of image:tag pairs
                 if success and output:
                     image_tags = {}
-                    for line in output.split('\n'):
-                        repo_tag = line.strip().split(':')
+                    for line in output.split("\n"):
+                        repo_tag = line.strip().split(":")
                         if len(repo_tag) == 2:
-                            image_tags[repo_tag[0].split('/')[-1]] = repo_tag[1]
+                            image_tags[repo_tag[0].split("/")[-1]] = repo_tag[1]
                     # self.logger.info(f"Final parsed image tags: {image_tags}")
                     await send_status({"status": "success", "tags": image_tags})
                 else:
@@ -302,7 +302,7 @@ class CabotDashboardClient:
                         while True:
                             cabot_system_status = await self.get_cabot_system_status()
                             self.logger.debug(f"Add status to poll request: {cabot_system_status}")
-                            status_code, data = await self._make_request(session, 'get', f"poll/{self.cabot_id}", {"cabot_system_status": cabot_system_status})
+                            status_code, data = await self._make_request(session, "get", f"poll/{self.cabot_id}", {"cabot_system_status": cabot_system_status})
 
                             if status_code == 200:
                                 await self.handle_command(session, data)
@@ -318,8 +318,8 @@ class CabotDashboardClient:
 
 
 async def main():
-    parser = argparse.ArgumentParser(description='CaBot Dashboard Client')
-    parser.add_argument('-s', '--simulate', type=int, help='Simulation mode: specify number of clients to generate')
+    parser = argparse.ArgumentParser(description="CaBot Dashboard Client")
+    parser.add_argument("-s", "--simulate", type=int, help="Simulation mode: specify number of clients to generate")
     args = parser.parse_args()
 
     if args.simulate:
