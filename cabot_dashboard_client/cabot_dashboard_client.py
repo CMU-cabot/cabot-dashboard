@@ -431,9 +431,9 @@ async def main():
         clients = [CabotDashboardClient(f"cabot_{i+1}").run() for i in range(args.simulate)]
         await asyncio.gather(*clients)
     else:
-        cabot_id = os.environ.get("CABOT_DASHBOARD_CABOT_ID")
+        cabot_id = os.environ.get("CABOT_NAME")
         if not cabot_id:
-            logging.error("Environment variable CABOT_ID is not set")
+            logging.error("Environment variable CABOT_NAME is not set")
             return
 
         client = CabotDashboardClient(cabot_id)
