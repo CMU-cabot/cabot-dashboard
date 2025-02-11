@@ -10,9 +10,11 @@ from typing import Optional, Tuple, Dict, Any, Union
 import json
 import random
 
+
 @dataclass
 class Config:
     """Configuration data class"""
+
     log_level: str
     log_to_file: bool
     log_file: str
@@ -41,11 +43,13 @@ class Config:
             polling_interval=int(os.environ.get("CABOT_DASHBOARD_POLLING_INTERVAL", "1")),
             client_id=os.environ.get("CABOT_DASHBOARD_CLIENT_ID"),
             client_secret=os.environ.get("CABOT_DASHBOARD_CLIENT_SECRET"),
-            debug_mode=os.environ.get('CABOT_DASHBOARD_DEBUG_MODE', 'false').lower() == 'true'
+            debug_mode=os.environ.get('CABOT_DASHBOARD_DEBUG_MODE', 'false').lower() == 'true',
         )
+
 
 class CommandType(Enum):
     """Supported command types"""
+
     ROS_START = "ros-start"
     ROS_STOP = "ros-stop"
     SYSTEM_REBOOT = "system-reboot"
@@ -56,13 +60,15 @@ class CommandType(Enum):
     DEBUG1 = "debug1"
     DEBUG2 = "debug2"
 
+
 class SystemCommand:
     """System command execution handler"""
+
     def __init__(self, cabot_id: str, debug_mode: bool = False):
         self.cabot_id = cabot_id
         self.debug_mode = debug_mode
         self.logger = logging.getLogger(__name__)
-        
+
     async def execute(self, command: list[str]) -> Tuple[bool, Optional[str]]:
         command_type = CommandType(command[0])
         if self.debug_mode:
@@ -88,11 +94,7 @@ class SystemCommand:
         try:
             command.insert(0, "./remote-exec.sh")
             self.logger.info(f"Executing command: {' '.join(command)}")
-            process = await asyncio.create_subprocess_exec(
-                *command,
-                stdout=asyncio.subprocess.PIPE,
-                stderr=asyncio.subprocess.PIPE
-            )
+            process = await asyncio.create_subprocess_exec(*command, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
             stdout, stderr = await process.communicate()
 
             stdout_str = stdout.decode().strip()
@@ -111,6 +113,7 @@ class SystemCommand:
             self.logger.error(f"Error executing command: {e}")
             return False, str(e)
 
+
 def setup_logger(config: Config) -> logging.Logger:
     logger = logging.getLogger(__name__)
     logger.setLevel(config.log_level)
@@ -119,13 +122,14 @@ def setup_logger(config: Config) -> logging.Logger:
     handler = logging.FileHandler(config.log_file) if config.log_to_file else logging.StreamHandler()
     handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s', '%Y-%m-%d %H:%M:%S'))
     logger.addHandler(handler)
-    
+
     logger.debug("Logger initialized with:")
     logger.debug(f"- Log level: {config.log_level}")
     logger.debug(f"- Server URL: {config.server_url}")
     logger.debug(f"- API Key: {config.api_key[:4]}..." if config.api_key else "- API Key: Not set")
-    
+
     return logger
+
 
 class CabotDashboardClient:
     def __init__(self, cabot_id: str):
@@ -144,7 +148,7 @@ class CabotDashboardClient:
                     'client_id': self.config.client_id,
                     'client_secret': self.config.client_secret,
                     'username': self.config.client_id,
-                    'password': self.config.client_secret
+                    'password': self.config.client_secret,
                 }
 
                 self.logger.debug(f"Requesting token from {self.config.server_url}/oauth/token")
@@ -153,7 +157,7 @@ class CabotDashboardClient:
                 async with session.post(
                     f"{self.config.server_url}/oauth/token",
                     data=data,
-                    headers={"Content-Type": "application/x-www-form-urlencoded"}
+                    headers={"Content-Type": "application/x-www-form-urlencoded"},
                 ) as response:
                     if response.status == 200:
                         token_data = await response.json()
@@ -179,7 +183,7 @@ class CabotDashboardClient:
         headers = {
             "Authorization": f"Bearer {self.config.token}",
             "X-API-Key": self.config.api_key,
-            "Content-Type": "application/json"
+            "Content-Type": "application/json",
         }
 
         url = f"{self.config.server_url}/api/client/{endpoint}"
@@ -193,7 +197,7 @@ class CabotDashboardClient:
                     await self._get_token()
                     headers["Authorization"] = f"Bearer {self.config.token}"
                     async with session.request(method, url, json=data, headers=headers) as retry_response:
-                        return retry_response.status, await retry_response.json() if retry_response.status == 200 else None
+                        return retry_response.status, (await retry_response.json() if retry_response.status == 200 else None)
                 return response.status, await response.json() if response.status == 200 else None
         except Exception as e:
             self.logger.error(f"Request error: {str(e)}")
@@ -298,12 +302,7 @@ class CabotDashboardClient:
                         while True:
                             cabot_system_status = await self.get_cabot_system_status()
                             self.logger.debug(f"Add status to poll request: {cabot_system_status}")
-                            status_code, data = await self._make_request(
-                                session, 
-                                'get', 
-                                f"poll/{self.cabot_id}",
-                                {"cabot_system_status": cabot_system_status}
-                            )
+                            status_code, data = await self._make_request(session, 'get', f"poll/{self.cabot_id}", {"cabot_system_status": cabot_system_status})
 
                             if status_code == 200:
                                 await self.handle_command(session, data)
@@ -316,6 +315,7 @@ class CabotDashboardClient:
 
                 except Exception:
                     await asyncio.sleep(self.config.retry_delay)
+
 
 async def main():
     parser = argparse.ArgumentParser(description='CaBot Dashboard Client')
