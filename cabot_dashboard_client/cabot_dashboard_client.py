@@ -146,10 +146,10 @@ class CabotDashboardClient:
                     'username': self.config.client_id,
                     'password': self.config.client_secret
                 }
-                
+
                 self.logger.debug(f"Requesting token from {self.config.server_url}/oauth/token")
                 self.logger.debug(f"Client ID: {self.config.client_id}")
-                
+
                 async with session.post(
                     f"{self.config.server_url}/oauth/token",
                     data=data,
@@ -171,20 +171,20 @@ class CabotDashboardClient:
     async def _make_request(self, session: aiohttp.ClientSession, method: str, endpoint: str, data: Optional[Dict] = None) -> Tuple[Optional[int], Optional[Dict]]:
         if not self.config.token:
             await self._get_token()
-        
+
         if not self.config.api_key:
             self.logger.error("API key is not configured")
             return None, None
-            
+
         headers = {
             "Authorization": f"Bearer {self.config.token}",
             "X-API-Key": self.config.api_key,
             "Content-Type": "application/json"
         }
-        
+
         url = f"{self.config.server_url}/api/client/{endpoint}"
         self.logger.debug(f"Making request to {url} with API key: {self.config.api_key[:4]}...")
-        
+
         try:
             async with getattr(session, method)(url, headers=headers, json=data) as response:
                 response_data = await response.json() if response.status == 200 else None
@@ -199,20 +199,6 @@ class CabotDashboardClient:
             self.logger.error(f"Request error: {str(e)}")
             return None, None
 
-    async def send_status(self, session: aiohttp.ClientSession, status: Union[str, Dict]) -> bool:
-        """Send status to server
-        Args:
-            session: aiohttp client session
-            status: Status message (string) or status data (dict)
-        """
-        # If status is already a dict, use it as is, otherwise create a simple message dict
-        data = {"message": status} if isinstance(status, str) else status
-        self.logger.info(f"Sending status: {json.dumps(data, indent=2)}")
-        status_code, _ = await self._make_request(session, 'post', f"send/{self.cabot_id}", data)
-        if status_code == 404:
-            return False
-        return True
-
     async def connect(self, session: aiohttp.ClientSession) -> bool:
         for attempt in range(self.config.max_retries):
             status_code, _ = await self._make_request(session, 'post', f"connect/{self.cabot_id}")
@@ -226,54 +212,39 @@ class CabotDashboardClient:
     async def handle_command(self, session: aiohttp.ClientSession, command: Dict[str, Any]) -> None:
         self.logger.info(f"Received command: {command}")
         command_type = command.get('command')
-        
+        status_type = "command"
+
+        async def send_status(data: Dict) -> bool:
+            data["type"] = status_type
+            self.logger.info(f"Sending status: {json.dumps(data, indent=2)}")
+            status_code, _ = await self._make_request(session, "post", f"send/{self.cabot_id}", data)
+            return False if status_code == 404 else True
+
         try:
             cmd_type = CommandType(command_type)
-            
+
             if cmd_type == CommandType.SOFTWARE_UPDATE:
+                status_type = "software_update"
                 images = command.get('commandOption', {}).get('images', [])
                 if not images:
-                    await self.send_status(session, {
-                        "type": "software_update",
-                        "status": "error",
-                        "message": "No images specified for software update"
-                    })
+                    await send_status({"status": "error", "message": "No images specified for software update"})
                     return
-                
-                await self.send_status(session, {
-                    "type": "software_update",
-                    "status": "start",
-                    "message": f"Starting software update for {len(images)} images..."
-                })
 
-                success, error = await self.execute([command_type, f'cabot-software-update@{json.dumps(images)}'])
-                
+                await send_status({"status": "start", "message": f"Starting software update for {len(images)} images..."})
+                success, error = await self.execute([command_type, f"cabot-software-update@{json.dumps(images)}"])
                 if success:
-                    await self.send_status(session, {
-                        "type": "software_update",
-                        "status": "success",
-                        "message": "Software update completed successfully"
-                    })
+                    await send_status({"status": "success", "message": "Software update completed successfully"})
                 else:
-                    await self.send_status(session, {
-                        "type": "software_update",
-                        "status": "error",
-                        "message": f"Software update failed: {error}"
-                    })
-                return
+                    await send_status({"status": "error", "message": f"Software update failed: {error}"})
 
-            if cmd_type == CommandType.GET_IMAGE_TAGS:
-                self.logger.info("Starting GET_IMAGE_TAGS command processing")
-                await self.send_status(session, {
-                    "type": "image_tags",
-                    "status": "start",
-                    "message": "Getting image tags..."
-                })
+            elif cmd_type == CommandType.GET_IMAGE_TAGS:
+                status_type = "image_tags"
+                # self.logger.info("Starting GET_IMAGE_TAGS command processing")
+                await send_status({"status": "start", "message": "Getting image tags..."})
                 # Get docker images tags
                 # self.logger.info("Executing docker images command")
                 success, output = await self.system_command.execute([command_type])
                 # self.logger.info(f"Docker images command result - success: {success}, output: {output}")
-                
                 # Parse the output and create a dictionary of image:tag pairs
                 if success and output:
                     image_tags = {}
@@ -281,56 +252,24 @@ class CabotDashboardClient:
                         repo_tag = line.strip().split(':')
                         if len(repo_tag) == 2:
                             image_tags[repo_tag[0].split('/')[-1]] = repo_tag[1]
-                    
-                    self.logger.info(f"Final parsed image tags: {image_tags}")
-                    # Send the image tags back
-                    await self.send_status(session, {
-                        "type": "image_tags",
-                        "status": "success",
-                        "tags": image_tags
-                    })
+                    # self.logger.info(f"Final parsed image tags: {image_tags}")
+                    await send_status({"status": "success", "tags": image_tags})
                 else:
                     error_msg = "No output from docker images command" if not output else f"Error getting image tags: {output}"
-                    await self.send_status(session, {
-                        "type": "image_tags",
-                        "status": "error",
-                        "message": error_msg
-                    })
-                return
-            
-            await self.send_status(session, {
-                "type": "command",
-                "status": "start",
-                "message": f"Executing {command_type}..."
-            })
+                    await send_status({"status": "error", "message": error_msg})
 
-            success, error = await self.system_command.execute([command_type])
-
-            if success:
-                await self.send_status(session, {
-                    "type": "command",
-                    "status": "success",
-                    "message": f"{command_type} completed successfully"
-                })
             else:
-                await self.send_status(session, {
-                    "type": "command",
-                    "status": "error",
-                    "message": f"Error {command_type}: {error}"
-                })
+                await send_status({"status": "start", "message": f"Executing {command_type}..."})
+                success, error = await self.system_command.execute([command_type])
+                if success:
+                    await send_status({"status": "success", "message": f"{command_type} completed successfully"})
+                else:
+                    await send_status({"status": "error", "message": f"Error {command_type}: {error}"})
 
         except ValueError:
-            await self.send_status(session, {
-                "type": "command",
-                "status": "error",
-                "message": f"Invalid command type: {command_type}"
-            })
+            await send_status({"status": "error", "message": f"Invalid command type: {command_type}"})
         except Exception as e:
-            await self.send_status(session, {
-                "type": "command",
-                "status": "error",
-                "message": f"Error executing command {command_type}: {str(e)}"
-            })
+            await send_status({"status": "error", "message": f"Error executing command {command_type}: {str(e)}"})
 
     async def get_cabot_system_status(self) -> str:
         success, error = await self.system_command.execute([CommandType.CABOT_IS_ACTIVE.value])
@@ -394,6 +333,7 @@ async def main():
 
         client = CabotDashboardClient(cabot_id)
         await client.run()
+
 
 if __name__ == "__main__":
     try:
