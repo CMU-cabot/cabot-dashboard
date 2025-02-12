@@ -52,7 +52,7 @@ docker push azure-image-name:tag
 - `CABOT_DASHBOARD_LOG_LEVEL=INFO`
 - `CABOT_DASHBOARD_LOG_TO_FILE=false`
 - `CABOT_DASHBOARD_POLLING_INTERVAL=1`
-- `CABOT_DASHBOARD_CABOT_ID=cabot10`
+- `CABOT_NAME=cabot10`
 
 ### デプロイ手順
 
