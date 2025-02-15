@@ -44,7 +44,7 @@ platform=
 base_name=cabot-base
 local=0
 tags=
-services="server client"
+services="dashboard-server dashboard-client"
 
 while getopts "hb:ilP:t:" arg; do
     case $arg in
@@ -131,9 +131,9 @@ if [[ -z $tags ]]; then
 fi
 for service in ${services}; do
     if [[ "$tags" == *,* ]]; then
-        tag_option+=" --set=${service}.tags=${REGISTRY}/cabot-dashboard-${service}:{$tags}"
+        tag_option+=" --set=${service}.tags=${REGISTRY}/cabot-${service}:{$tags}"
     else
-        tag_option+=" --set=${service}.tags=${REGISTRY}/cabot-dashboard-${service}:$tags"
+        tag_option+=" --set=${service}.tags=${REGISTRY}/cabot-${service}:$tags"
     fi
 done
 
