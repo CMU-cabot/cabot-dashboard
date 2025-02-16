@@ -1,5 +1,5 @@
 services:
-  server:
+  dashboard-server:
     image: cmucal/cabot-dashboard-server
     build:
       context: ./cabot_dashboard_server
@@ -36,7 +36,7 @@ services:
         max-size: "200k"
         max-file: "10"
 
-  client:
+  dashboard-client:
     image: cmucal/cabot-dashboard-client
     build:
       context: ./cabot_dashboard_client
