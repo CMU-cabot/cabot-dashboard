@@ -24,5 +24,5 @@ case $1 in
 esac
 
 echo $args 1>&2
-options="-o StrictHostKeyChecking=no -i $CABOT_DASHBOARD_ID_FILE"
-ssh $options $CABOT_DASHBOARD_USER_NAME@host_addr $args
+options="-o StrictHostKeyChecking=no -i $CABOT_SSH_ID_FILE"
+ssh $options $CABOT_SSH_TARGET $args

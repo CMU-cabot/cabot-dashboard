@@ -48,9 +48,6 @@ services:
           - linux/amd64
         output:
           - type=registry
-    volumes:
-      # for ssh
-      - ${PWD}/id_cabot:/var/id_cabot
     environment:
       - CABOT_DASHBOARD_SERVER_URL
       - CABOT_DASHBOARD_API_KEY
@@ -63,12 +60,8 @@ services:
       - CABOT_DASHBOARD_DEBUG_MODE
       - CABOT_DASHBOARD_DEBUG_STATUS
       # for ssh
-      - CABOT_DASHBOARD_USER_NAME=$USER
-      - CABOT_DASHBOARD_ID_FILE=/var/id_cabot
-    network_mode: host
-    extra_hosts:
-      # for ssh
-      - "host_addr:host-gateway"
+      - CABOT_SSH_TARGET
+      - CABOT_SSH_ID_FILE
     logging:
       driver: "json-file"
       options:
