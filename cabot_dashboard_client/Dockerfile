@@ -1,7 +1,7 @@
 FROM python:3.9-slim
 
 RUN apt-get update && apt-get install -y \
-    ssh \
+    ssh-client \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /client
