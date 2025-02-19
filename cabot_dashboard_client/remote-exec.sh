@@ -12,9 +12,9 @@ case $1 in
     ros-stop)
         args="systemctl --user stop cabot";;
     system-reboot)
-        args="echo sudo systemctl reboot";;
+        args="sudo systemctl reboot";;
     system-poweroff)
-        args="echo sudo systemctl poweroff";;
+        args="sudo systemctl poweroff";;
     software_update)
         shift; args="echo software_update $@";;
     get-image-tags)
