@@ -36,7 +36,7 @@ services:
         max-file: "10"
 
   dashboard-client:
-    image: cmucal/cabot-dashboard-client
+    image: cmucal/cabot-dashboard-client:${CABOT_LAUNCH_IMAGE_TAG:-latest}
     build:
       context: ./cabot_dashboard_client
       x-bake:
