@@ -1,4 +1,5 @@
 #!/usr/bin/bash
+set -e
 
 if [ -z "$2" ]; then
     exit 1

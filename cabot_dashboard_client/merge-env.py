@@ -2,13 +2,14 @@ import argparse
 import typing
 
 
-def merge(original: typing.TextIO, update: typing.TextIO, result: typing.TextIO):
-    def parse_kv(line: str):
-        kv = line.strip().split("=", maxsplit=1)
-        if len(kv) == 2:
-            kv = kv[0].strip(), kv[1].strip()
-            return None if kv[0].startswith("#") else kv
+def parse_kv(line: str):
+    kv = line.strip().split("=", maxsplit=1)
+    if len(kv) == 2:
+        kv = kv[0].strip(), kv[1].strip()
+        return None if kv[0].startswith("#") else kv
 
+
+def merge(original: typing.TextIO, update: typing.TextIO, result: typing.TextIO):
     result_dict = {}
     for kv in filter(lambda x: x, map(parse_kv, original.readlines())):
         if kv[1] != "":
