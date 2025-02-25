@@ -1,13 +1,8 @@
 import argparse
 
 
-def parse_entry(line: str):
-    p = line.strip().split("=", maxsplit=1)
-    return (p[0].strip(), p[1].strip()) if len(p) == 2 and "#" not in p[0] else (None, None)
-
-
 def load_env(file):
-    return {k: v for k, v in (parse_entry(line) for line in file) if k}
+    return {p[0].strip(): p[1].strip() for p in (ln.split("=", maxsplit=1) for ln in file) if len(p) == 2 and "#" not in p[0]}
 
 
 def dump_env(dict_env, file):
