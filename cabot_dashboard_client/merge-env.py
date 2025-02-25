@@ -11,10 +11,10 @@ def parse_kv(line: str):
 
 def merge(original: typing.TextIO, update: typing.TextIO, result: typing.TextIO):
     result_dict = {}
-    for kv in filter(lambda x: x, map(parse_kv, original.readlines())):
+    for kv in filter(lambda kv: kv, map(parse_kv, original.readlines())):
         if kv[1] != "":
             result_dict[kv[0]] = kv[1]
-    for kv in filter(lambda x: x, map(parse_kv, update.readlines())):
+    for kv in filter(lambda kv: kv, map(parse_kv, update.readlines())):
         if kv[1] != "":
             result_dict[kv[0]] = kv[1]
         else:
