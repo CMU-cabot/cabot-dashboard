@@ -1,28 +1,18 @@
 import argparse
-import typing
 
 
-def load_key_values(file: typing.TextIO):
-    def parse_kv(line: str):
-        kv = line.strip().split("=", maxsplit=1)
-        if len(kv) == 2 and "#" not in kv[0]:
-            return kv[0].strip(), kv[1].strip()
-
-    return filter(lambda kv: kv, map(parse_kv, file.readlines()))
+def parse_entry(line: str):
+    p = line.strip().split("=", maxsplit=1)
+    return (p[0].strip(), p[1].strip()) if len(p) == 2 and "#" not in p[0] else (None, None)
 
 
-def merge(original: typing.TextIO, update: typing.TextIO, result: typing.TextIO):
-    result_dict = {}
-    for key, value in load_key_values(original):
-        if value:
-            result_dict[key] = value
-    for key, value in load_key_values(update):
-        if value:
-            result_dict[key] = value
-        else:
-            del result_dict[key]
-    for key in sorted(result_dict):
-        result.write(f"{key}={result_dict[key]}\n")
+def load_env(file):
+    return {k: v for k, v in (parse_entry(line) for line in file) if k}
+
+
+def dump_env(dict_env, file):
+    for k, v in sorted(dict_env.items(), key=lambda x: x[0]):
+        v and file.write(f"{k}={v}\n")
 
 
 if __name__ == "__main__":
@@ -31,4 +21,4 @@ if __name__ == "__main__":
     parser.add_argument("update", type=argparse.FileType("r", encoding="UTF-8"), help="Specify .env file to merge")
     parser.add_argument("output", type=argparse.FileType("w", encoding="UTF-8"), help="Specify output .env file")
     args = parser.parse_args()
-    merge(args.original, args.update, args.output)
+    dump_env(load_env(args.original) | load_env(args.update), args.output)
