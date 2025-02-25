@@ -4,21 +4,20 @@ import typing
 
 def parse_kv(line: str):
     kv = line.strip().split("=", maxsplit=1)
-    if len(kv) == 2:
-        kv = kv[0].strip(), kv[1].strip()
-        return None if kv[0].startswith("#") else kv
+    if len(kv) == 2 and "#" not in kv[0]:
+        return kv[0].strip(), kv[1].strip()
 
 
 def merge(original: typing.TextIO, update: typing.TextIO, result: typing.TextIO):
     result_dict = {}
-    for kv in filter(lambda kv: kv, map(parse_kv, original.readlines())):
-        if kv[1] != "":
-            result_dict[kv[0]] = kv[1]
-    for kv in filter(lambda kv: kv, map(parse_kv, update.readlines())):
-        if kv[1] != "":
-            result_dict[kv[0]] = kv[1]
+    for key, value in filter(lambda kv: kv, map(parse_kv, original.readlines())):
+        if value != "":
+            result_dict[key] = value
+    for key, value in filter(lambda kv: kv, map(parse_kv, update.readlines())):
+        if value != "":
+            result_dict[key] = value
         else:
-            del result_dict[kv[0]]
+            del result_dict[key]
     for key in sorted(result_dict):
         result.write(f"{key}={result_dict[key]}\n")
 
