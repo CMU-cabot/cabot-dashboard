@@ -447,3 +447,7 @@ body {
 .log-level-info {
     color: #0d6efd;
 }
+
+.version-info {
+    display: none;
+}

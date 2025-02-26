@@ -863,6 +863,7 @@ function updateMessageList(messages) {
 
 // Update software
 function updateSoftware() {
+    document.querySelector(".version-checkbox").checked=true
     const updateError = document.getElementById('updateError');
     
     // Clear previous error message

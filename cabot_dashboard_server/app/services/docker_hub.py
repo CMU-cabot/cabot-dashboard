@@ -21,20 +21,20 @@ class DockerHubService:
         if not self._initialized:
             self._tags_cache: Dict[str, dict] = {
                 'Dockerhub1': {
-                    'name': '',
+                    'name': 'cabot-bag',
                     'tags': [],
                     'last_updated': None
                 },
-                'Dockerhub2': {
-                    'name': '',
-                    'tags': [],
-                    'last_updated': None
-                },
-                'Dockerhub3': {
-                    'name': '',
-                    'tags': [],
-                    'last_updated': None
-                }
+                # 'Dockerhub2': {
+                #     'name': '',
+                #     'tags': [],
+                #     'last_updated': None
+                # },
+                # 'Dockerhub3': {
+                #     'name': '',
+                #     'tags': [],
+                #     'last_updated': None
+                # }
             }
             self._base_url = "https://hub.docker.com/v2"
             self._initialized = True
