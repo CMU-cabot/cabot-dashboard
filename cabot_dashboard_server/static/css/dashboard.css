@@ -452,6 +452,11 @@ body {
     display: none;
 }
 
+.version-tag {
+    background-color: #eef;
+}
+
 .env-tag {
+    background-color: #fee;
     width: calc(50% - 6px);
 }
