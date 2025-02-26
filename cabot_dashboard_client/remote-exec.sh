@@ -18,6 +18,8 @@ case $1 in
         args="sudo systemctl poweroff";;
     get-image-tags)
         args="docker images --format {{.Repository}}:{{.Tag}}";;
+    get-env)
+        args="cat ~/cabot_ws/cabot/.env";;
     software_update)
         echo CABOT_LAUNCH_IMAGE_TAG=$2 > /tmp/update.env
         ./remote-merge-env.sh /tmp/update.env

@@ -57,6 +57,7 @@ class CommandType(Enum):
     CABOT_IS_ACTIVE = "cabot-is-active"
     SOFTWARE_UPDATE = "software_update"
     GET_IMAGE_TAGS = "get-image-tags"
+    GET_ENV = "get-env"
     DEBUG1 = "debug1"
     DEBUG2 = "debug2"
 
@@ -260,6 +261,17 @@ class CabotDashboardClient:
                     await send_status({"status": "success", "tags": image_tags})
                 else:
                     error_msg = "No output from docker images command" if not output else f"Error getting image tags: {output}"
+                    await send_status({"status": "error", "message": error_msg})
+
+            elif cmd_type == CommandType.GET_ENV:
+                status_type = "env"
+                await send_status({"status": "start", "message": "Getting environment variables..."})
+                success, output = await self.system_command.execute([command_type])
+                if success and output:
+                    env = {p[0].strip(): p[1].strip() for p in (ln.split("=", maxsplit=1) for ln in output.split("\n")) if len(p) == 2 and "#" not in p[0]}
+                    await send_status({"status": "success", "env": env})
+                else:
+                    error_msg = "No environment variables" if not output else f"Error getting environment variables: {output}"
                     await send_status({"status": "error", "message": error_msg})
 
             else:
