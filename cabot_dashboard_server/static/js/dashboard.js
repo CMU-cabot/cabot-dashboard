@@ -526,6 +526,11 @@ function updateDashboard(data) {
                     <i class="bi bi-info-circle me-2"></i>Please execute "Get Image Tags" to retrieve the current software versions.
                 </div>
                 ` : ''}
+                <div class="image-versions mb-2">
+                    ${Object.entries(robot.env || {}).map(([name, tag]) => 
+                        `<div class="version-tag env-tag">${name}=${tag}</div>`
+                    ).join('')}
+                </div>
                 <div class="robot-info">
                     ${robot.messages && robot.messages.length > 0 ? `
                     <div class="message-area mb-2">

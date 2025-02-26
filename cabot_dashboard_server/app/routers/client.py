@@ -125,6 +125,16 @@ async def send_status(
                 robot_manager.update_robot_message(client_id, msg_content, "error")
             else:
                 robot_manager.update_robot_message(client_id, msg_content, msg_status)
+        if msg_type == "env":
+            if msg_status == "success":
+                env = status.get("env", {})
+                logger.info(f"Updating environment variables for {client_id}: {json.dumps(env, indent=2)}")
+                robot_manager.update_robot_env(client_id, env)
+                robot_manager.update_robot_message(client_id, "Environment variables updated successfully", "success")
+            elif msg_status == "error":
+                robot_manager.update_robot_message(client_id, msg_content, "error")
+            else:
+                robot_manager.update_robot_message(client_id, msg_content, msg_status)
         elif msg_type == "software_update":
             robot_manager.update_robot_message(client_id, msg_content, msg_status)
         elif msg_type == "command":

@@ -451,3 +451,7 @@ body {
 .version-info {
     display: none;
 }
+
+.env-tag {
+    width: calc(50% - 6px);
+}

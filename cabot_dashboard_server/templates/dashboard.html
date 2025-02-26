@@ -55,6 +55,11 @@
                                     <i class="bi bi-cloud"></i> Get Image Tags
                                 </button>
                             </div>
+                            <div class="col-6">
+                                <button class="btn btn-info w-100" onclick="sendCommand('get-env')">
+                                    <i class="bi bi-gear"></i> Get Environment Variables
+                                </button>
+                            </div>
                         </div>
                         <div id="actionError" class="alert alert-danger mt-3" style="display: none;"></div>
                     </div>
@@ -109,6 +114,15 @@
                                     {% for image_name, tag in robot.images.items() %}
                                     <div class="version-tag">
                                         <strong>{{ image_name }}</strong>: {{ tag }}
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                                {% endif %}
+                                {% if robot.env %}
+                                <div class="image-versions">
+                                    {% for image_name, tag in robot.env.items() %}
+                                    <div class="version-tag env-tag">
+                                        <strong>{{ image_name }}</strong>={{ tag }}
                                     </div>
                                     {% endfor %}
                                 </div>

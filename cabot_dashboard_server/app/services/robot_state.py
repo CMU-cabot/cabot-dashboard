@@ -25,6 +25,7 @@ class RobotStateManager:
                 "last_poll": None,
                 "connected": False,
                 "images": {},
+                "env": {},
                 "all_messages": []  # Only store messages in all_messages
             }
         return cls._instance
@@ -59,6 +60,7 @@ class RobotStateManager:
             "last_poll": datetime.now().isoformat(),
             "connected": True if state.get("status") == "connected" else False,
             "images": current_state.get("images", {}),
+            "env": current_state.get("env", {}),
             "all_messages": current_state.get("all_messages", [])  # Preserve message history
         }
 
@@ -150,6 +152,34 @@ class RobotStateManager:
             logger.warning(f"Attempted to update images for unknown client: {client_id}")
             raise ValueError(f"Client {client_id} not found")
 
+    def update_robot_env(self, client_id: str, env: Dict[str, str]):
+        """Update environment variables for a robot
+        Args:
+            client_id (str): Robot ID
+            env (Dict[str, str]): Dictionary of env name to value mapping
+        """
+        if client_id in self.connected_cabots:
+            logger.info(f"Updating env for {client_id}: {env}")
+            # Get current state to preserve all fields
+            current_state = self.connected_cabots[client_id]
+
+            # Create new state with all current values
+            updated_state = current_state.copy()
+            # for key, value in env.items():
+            #     if len(value) > 25:
+            #         env[key] = value[:10] + "..." + value[-10:]
+            # Update only the env
+            updated_state['env'] = env
+
+            # Update the state atomically
+            self.connected_cabots[client_id] = updated_state
+
+            # Ensure the state change is broadcast
+            asyncio.create_task(self._notify_state_change())
+        else:
+            logger.warning(f"Attempted to update images for unknown client: {client_id}")
+            raise ValueError(f"Client {client_id} not found")
+
     def get_robot_images(self, client_id: str) -> Dict[str, str]:
         """Get image tags for a robot
         Args:
@@ -191,6 +221,7 @@ class RobotStateManager:
                 'messages': panel_messages,  # Latest 5 messages within 5 minutes for panel display
                 'all_messages': all_messages,  # All messages for history view
                 'images': robot.get('images', {}),
+                'env': robot.get('env', {}),
                 'system_status': robot.get('system_status', 'unknown')  # Add system_status
             })
         return cabot_list
