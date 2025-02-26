@@ -16,10 +16,12 @@ case $1 in
         args="sudo systemctl reboot";;
     system-poweroff)
         args="sudo systemctl poweroff";;
-    software_update)
-        shift; args="echo software_update $@";;
     get-image-tags)
         args="docker images --format {{.Repository}}:{{.Tag}}";;
+    software_update)
+        echo CABOT_LAUNCH_IMAGE_TAG=$2 > /tmp/update.env
+        ./remote-merge-env.sh /tmp/update.env
+        exit 0;;
     *)
         args=$@;;
 esac

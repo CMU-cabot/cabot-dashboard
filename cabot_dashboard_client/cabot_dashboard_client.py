@@ -235,7 +235,7 @@ class CabotDashboardClient:
                     return
 
                 await send_status({"status": "start", "message": f"Starting software update for {len(images)} images..."})
-                success, error = await self.system_command.execute([command_type, f"cabot-software-update@{json.dumps(images)}"])
+                success, error = await self.system_command.execute([command_type, images[0]["version"]])
                 if success:
                     await send_status({"status": "success", "message": "Software update completed successfully"})
                 else:
