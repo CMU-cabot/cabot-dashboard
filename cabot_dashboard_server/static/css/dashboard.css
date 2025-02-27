@@ -462,5 +462,5 @@ body {
 }
 
 .robot-list {
-    max-height: unset;
+    max-height: 100vh;
 }
