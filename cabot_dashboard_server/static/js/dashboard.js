@@ -88,6 +88,7 @@ function initializeUI() {
 
     // Initialize Docker Hub version items
     initializeDockerVersions();
+    addEnvRow()
 }
 
 // Initialize WebSocket connection
@@ -193,6 +194,9 @@ function initWebSocket() {
                         break;
                     case 'update_software_response':
                         handleSoftwareUpdateResponse(data);
+                        break;
+                    case 'refresh_site_response':
+                        handleSiteResponse(data);
                         break;
                 }
             } catch (error) {
@@ -411,6 +415,18 @@ async function executeAction() {
                         commandOption = {
                             images: selectedImages
                         };
+                    }
+                } else if(currentAction === 'site_update') {
+                    commandOption = {
+                        'CABOT_SITE_REPO': document.getElementById('CABOT_SITE_REPO').value.trim(),
+                        'CABOT_SITE_VERSION': document.getElementById('CABOT_SITE_VERSION').value.trim(),
+                        'CABOT_SITE': document.getElementById('CABOT_SITE').value.trim()
+                    };
+                } else if(currentAction === 'env_update') {
+                    commandOption = {};
+                    for (const row of document.querySelectorAll('#envTable tbody tr')) {
+                        const input = row.querySelectorAll('input[type=text]');
+                        commandOption[input[0].value.trim()] = input[1].value.trim();
                     }
                 }
 
@@ -957,7 +973,8 @@ function showUpdateConfirmDialog(robots, versions) {
     content += versions.map(v => {
         const nameText = document.querySelector(`#version-${v.image_id} .version-name-text`);
         const imageName = nameText ? nameText.textContent.trim() : v.image_id;
-        return `<li>${imageName}: ${v.tag}</li>`;
+        // return `<li>${imageName}: ${v.tag}</li>`;
+        return `<li>*: ${v.tag}</li>`;
     }).join('');
     selectedRobotsList.innerHTML = content;
     
@@ -1171,5 +1188,213 @@ function formatDateTime(dateString) {
     } catch (error) {
         console.error('Error formatting date:', error);
         return dateString;
+    }
+}
+
+async function onSiteUpdate() {
+    const repository = document.getElementById('CABOT_SITE_REPO').value.trim();
+
+    console.log('Selected site repository:', repository);
+    try {
+        ws.send(JSON.stringify({
+            type: 'refresh_site',
+            repository: repository
+        }));
+    } catch (error) {
+        console.error('Failed to refresh site:', error);
+        const errorDiv = document.getElementById('siteError');
+        errorDiv.textContent = error.message || 'Failed to refresh site';
+        errorDiv.style.display = 'block';
+    }
+}
+
+function handleSiteResponse(data) {
+    console.log(data);
+    const repository = data.repository;
+    const siteRepo = document.getElementById('CABOT_SITE_REPO');
+    const siteVersions = document.getElementById('CABOT_SITE_VERSION');
+    const siteName = document.getElementById('CABOT_SITE');
+    const errorDiv = document.getElementById('siteError');
+    siteVersions.innerHTML = '';
+
+    if (data.status === 'error') {
+        siteName.value = '';
+        errorDiv.textContent = data.message || 'Failed to fetch site reposiiotry';
+        errorDiv.style.display = 'block';
+        return;
+    }
+
+    errorDiv.style.display = 'none';
+    siteRepo.value = data.info.CABOT_SITE_REPO;
+    siteName.value = data.info.CABOT_SITE;
+    data.info.CABOT_SITE_VERSION.forEach(version => {
+        const option = document.createElement('option');
+        option.value = version;
+        option.textContent = version;
+        siteVersions.appendChild(option);
+    });
+}
+
+function updateSite() {
+    const errorDiv = document.getElementById('siteError');
+
+    // Clear previous error message
+    errorDiv.style.display = 'none';
+    errorDiv.textContent = '';
+
+    // Get only enabled robots
+    const enabledRobots = Array.from(selectedRobots).filter(robotId => {
+        const checkbox = document.querySelector(`.robot-checkbox[value="${robotId}"]`);
+        return checkbox && !checkbox.disabled;
+    });
+
+    if (enabledRobots.length === 0) {
+        errorDiv.textContent = 'Please select at least one enabled robot.';
+        errorDiv.style.display = 'block';
+        return;
+    }
+
+    const siteRepo = document.getElementById('CABOT_SITE_REPO').value.trim();
+    const siteVersion = document.getElementById('CABOT_SITE_VERSION').value.trim();
+    const siteName = document.getElementById('CABOT_SITE').value.trim();
+    if (!siteRepo || !siteVersion || !siteName) {
+        errorDiv.textContent = 'Please fill in all site information.';
+        errorDiv.style.display = 'block';
+        return;
+    }
+
+    showSiteUpdateConfirmDialog(new Set(enabledRobots), siteRepo, siteVersion, siteName);
+}
+
+// Show update confirmation dialog
+function showSiteUpdateConfirmDialog(robots, siteRepo, siteVersion, siteName) {
+    const dialog = document.getElementById('confirmDialog');
+    const selectedRobotsList = document.getElementById('selectedRobots');
+    const confirmButton = document.getElementById('confirmAction');
+    const dialogTitle = document.getElementById('dialogTitle');
+    const dialogOverlay = document.getElementById('dialogOverlay');
+
+    if (!dialog || !selectedRobotsList || !confirmButton || !dialogTitle || !dialogOverlay) {
+        console.error('Dialog elements not found');
+        return;
+    }
+
+    // Update dialog content
+    let content = '<h6>Selected AI Suitcases:</h6>';
+    content += Array.from(robots).map(robotId => `<li>${robotId}</li>`).join('');
+    content += '<h6 class="mt-3">Site Parameters:</h6>';
+    content += `<li>Site Repository: ${siteRepo}</li>`;
+    content += `<li>Version: ${siteVersion}</li>`;
+    content += `<li>Package Name: ${siteName}</li>`;
+    selectedRobotsList.innerHTML = content;
+
+    // Set current action and versions
+    currentAction = 'site_update';
+
+    // Update dialog title and button
+    dialogTitle.textContent = 'Confirm Site Update';
+    confirmButton.textContent = 'Update Site';
+
+    // Show overlay and dialog
+    dialogOverlay.style.display = 'flex';
+
+    // Clear any previous error messages
+    const errorDiv = document.getElementById('dialogError');
+    if (errorDiv) {
+        errorDiv.style.display = 'none';
+        errorDiv.textContent = '';
+    }
+}
+
+function addEnvRow() {
+    var newRow = `<tr>
+        <td><input type="text" class="form-control" name="key[]"></td>
+        <td><input type="text" class="form-control" name="value[]"></td>
+        <td><button type="button" class="btn btn-outline-danger btn-sm refresh-btn remove-row"><i class="bi bi-trash"></i></button></td>
+    </tr>`;
+    document.querySelector('#envTable tbody').insertAdjacentHTML('beforeend', newRow);
+    const buttons = document.querySelectorAll('.remove-row');
+    buttons[buttons.length - 1].addEventListener('click', function() {
+        this.closest('tr').remove()
+    });
+}
+
+function updateEnv() {
+    const errorDiv = document.getElementById('envError');
+
+    // Clear previous error message
+    errorDiv.style.display = 'none';
+    errorDiv.textContent = '';
+
+    // Get only enabled robots
+    const enabledRobots = Array.from(selectedRobots).filter(robotId => {
+        const checkbox = document.querySelector(`.robot-checkbox[value="${robotId}"]`);
+        return checkbox && !checkbox.disabled;
+    });
+
+    if (enabledRobots.length === 0) {
+        errorDiv.textContent = 'Please select at least one enabled robot.';
+        errorDiv.style.display = 'block';
+        return;
+    }
+
+    const envList = {};
+    for (const row of document.querySelectorAll('#envTable tbody tr')) {
+        const input = row.querySelectorAll('input[type=text]');
+        const key = input[0].value.trim();
+        if (key) {
+            envList[key] = input[1].value.trim();
+        } else {
+            errorDiv.textContent = 'Environment key should not be empty.';
+            errorDiv.style.display = 'block';
+            return;
+        }
+    }
+    if (Object.keys(envList).length === 0) {
+        errorDiv.textContent = 'Please add at least one environment variable.';
+        errorDiv.style.display = 'block';
+        return;
+    }
+
+    showEnvUpdateConfirmDialog(new Set(enabledRobots), envList);
+}
+
+// Show update confirmation dialog
+function showEnvUpdateConfirmDialog(robots, envList) {
+    const dialog = document.getElementById('confirmDialog');
+    const selectedRobotsList = document.getElementById('selectedRobots');
+    const confirmButton = document.getElementById('confirmAction');
+    const dialogTitle = document.getElementById('dialogTitle');
+    const dialogOverlay = document.getElementById('dialogOverlay');
+
+    if (!dialog || !selectedRobotsList || !confirmButton || !dialogTitle || !dialogOverlay) {
+        console.error('Dialog elements not found');
+        return;
+    }
+
+    // Update dialog content
+    let content = '<h6>Selected AI Suitcases:</h6>';
+    content += Array.from(robots).map(robotId => `<li>${robotId}</li>`).join('');
+    content += '<h6 class="mt-3">Environment Variables:</h6>';
+    for (const [key, value] of Object.entries(envList)) {
+        content += `<li>${key}=${value}</li>`;
+    }
+    selectedRobotsList.innerHTML = content;
+
+    // Set current action and versions
+    currentAction = 'env_update';
+
+    // Update dialog title and button
+    dialogTitle.textContent = 'Confirm Environment Variable Update';
+    confirmButton.textContent = 'Update Environment Variables';
+
+    // Show overlay and dialog
+    dialogOverlay.style.display = 'flex';
+
+    // Clear any previous error messages
+    const errorDiv = document.getElementById('dialogError');
+    if (errorDiv) {
+        errorDiv.style.display = 'none';
+        errorDiv.textContent = '';
     }
 }

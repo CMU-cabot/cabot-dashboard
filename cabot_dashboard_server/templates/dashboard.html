@@ -23,50 +23,160 @@
         </nav>
 
         <div class="row">
-            <div class="col-12 col-lg-6 mb-4">
-                <div class="card">
-                    <div class="card-header">
-                        <h5 class="card-title mb-0">Actions</h5>
+            <div class="col-lg-6">
+                <div class="col-12 mb-4">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0">Actions</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row g-2">
+                                <div class="col-6">
+                                    <button class="btn btn-success w-100" onclick="sendCommand('ros_start')">
+                                        <i class="bi bi-play-circle"></i> ROS Start
+                                    </button>
+                                </div>
+                                <div class="col-6">
+                                    <button class="btn btn-warning w-100" onclick="sendCommand('ros_stop')">
+                                        <i class="bi bi-stop-circle"></i> ROS Stop
+                                    </button>
+                                </div>
+                                <div class="col-6">
+                                    <button class="btn btn-primary w-100" onclick="sendCommand('reboot')">
+                                        <i class="bi bi-arrow-clockwise"></i> Reboot
+                                    </button>
+                                </div>
+                                <div class="col-6">
+                                    <button class="btn btn-danger w-100" onclick="sendCommand('power_off')">
+                                        <i class="bi bi-power"></i> Power Off
+                                    </button>
+                                </div>
+                                <div class="col-6">
+                                    <button class="btn btn-info w-100" onclick="sendCommand('get-image-tags')">
+                                        <i class="bi bi-cloud"></i> Get Image Tags
+                                    </button>
+                                </div>
+                                <div class="col-6">
+                                    <button class="btn btn-secondary w-100" onclick="sendCommand('get-env')">
+                                        <i class="bi bi-gear"></i> Get Environment Variables
+                                    </button>
+                                </div>
+                            </div>
+                            <div id="actionError" class="alert alert-danger mt-3" style="display: none;"></div>
+                        </div>
                     </div>
-                    <div class="card-body">
-                        <div class="row g-2">
-                            <div class="col-6">
-                                <button class="btn btn-success w-100" onclick="sendCommand('ros_start')">
-                                    <i class="bi bi-play-circle"></i> ROS Start
-                                </button>
+                </div>
+                <div class="col-12 mb-4">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0">Published Software Versions</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="row">
+                                {% for key, image in docker_versions.items() %}
+                                <div class="col-8">
+                                    <div class="version-item" id="version-{{ key }}">
+                                        <div class="version-header">
+                                            <div class="version-info">
+                                                <input type="checkbox" class="version-checkbox" id="{{ key }}-checkbox" 
+                                                    value="{{ key }}" {% if not image.name %}disabled{% endif %}>
+                                                <div class="version-name-container">
+                                                    <span class="version-name-text {% if not image.name %}empty-name{% endif %}" onclick="startEdit(this)">
+                                                        {{ image.name or '+ Click here to set Docker image name' }}
+                                                    </span>
+                                                    <input type="text" class="form-control version-name-input" style="display: none;"
+                                                        value="{{ image.name }}" data-image-id="{{ key }}"
+                                                        placeholder="+ Click here to set Docker image name">
+                                                </div>
+                                            </div>
+                                            <div class="version-tags">
+                                                <select id="{{ key }}-version" class="form-select" 
+                                                        {% if not image.name %}disabled{% endif %}>
+                                                    {% for tag in image.tags %}
+                                                        <option value="{{ tag }}">{{ tag }}</option>
+                                                    {% endfor %}
+                                                </select>
+                                                <button onclick="refreshTags('{{ key }}')" class="btn btn-sm btn-light refresh-btn"
+                                                        {% if not image.name %}disabled{% endif %}>
+                                                    <i class="bi bi-arrow-clockwise"></i>
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div class="last-updated">
+                                            Last updated: {{ image.last_updated or 'Never' }}
+                                        </div>
+                                        <div id="{{ key }}-error" class="error-message"></div>
+                                    </div>
+                                </div>
+                                {% endfor %}
+                                <div class="col-4">
+                                    <button class="btn btn-primary w-100" onclick="updateSoftware()">
+                                        <i class="bi bi-cloud-arrow-down"></i> Update Software
+                                    </button>
+                                    <div id="updateError" class="alert alert-danger mt-2" style="display: none;"></div>
+                                </div>
                             </div>
-                            <div class="col-6">
-                                <button class="btn btn-warning w-100" onclick="sendCommand('ros_stop')">
-                                    <i class="bi bi-stop-circle"></i> ROS Stop
-                                </button>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-12 mb-4">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0">Site Repository</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="col-12">
+                                <div class="mb-3">
+                                    <label for="CABOT_SITE_REPO" class="form-label">Site Repository</label>
+                                    <input type="text" class="form-control" id="CABOT_SITE_REPO" onchange="onSiteUpdate()">
+                                </div>
+                                <div class="mb-3">
+                                    <label for="CABOT_SITE_VERSION" class="form-label">Version</label>
+                                    <select id="CABOT_SITE_VERSION" class="form-select"></select>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="CABOT_SITE" class="form-label">Package Name</label>
+                                    <input type="text" class="form-control" id="CABOT_SITE">
+                                </div>
+                                <div id="siteError" class="alert alert-danger mt-3" style="display: none;"></div>
+                                <div>
+                                    <button type="button" class="btn btn-primary float-end" onclick="updateSite()">
+                                        <i class="bi bi-cloud-arrow-down"></i> Update Site Repository
+                                    </button>
+                                </div>
                             </div>
-                            <div class="col-6">
-                                <button class="btn btn-primary w-100" onclick="sendCommand('reboot')">
-                                    <i class="bi bi-arrow-clockwise"></i> Reboot
+                        </div>
+                    </div>
+                </div>
+                <div class="col-12 mb-4">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="card-title mb-0">Custom Environment Variables</h5>
+                        </div>
+                        <div class="card-body">
+                            <div class="col-12">
+                                <table class="table" id="envTable">
+                                    <thead>
+                                        <tr>
+                                            <th style="width: 30%">Key</th>
+                                            <th colspan="2" style="width: 70%">Value</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody></tbody>
+                                </table>
+                                <div id="envError" class="alert alert-danger mt-3" style="display: none;"></div>
+                                <button type="button" class="btn btn-outline-secondary btn-sm refresh-btn" id="addEnvRow" onclick="addEnvRow()">
+                                    <i class="bi bi-plus"></i>
                                 </button>
-                            </div>
-                            <div class="col-6">
-                                <button class="btn btn-danger w-100" onclick="sendCommand('power_off')">
-                                    <i class="bi bi-power"></i> Power Off
-                                </button>
-                            </div>
-                            <div class="col-6">
-                                <button class="btn btn-info w-100" onclick="sendCommand('get-image-tags')">
-                                    <i class="bi bi-cloud"></i> Get Image Tags
-                                </button>
-                            </div>
-                            <div class="col-6">
-                                <button class="btn btn-info w-100" onclick="sendCommand('get-env')">
-                                    <i class="bi bi-gear"></i> Get Environment Variables
+                                <button type="button" class="btn btn-primary float-end" onclick="updateEnv()">
+                                    <i class="bi bi-cloud-arrow-down"></i> Update Environment Variables
                                 </button>
                             </div>
                         </div>
-                        <div id="actionError" class="alert alert-danger mt-3" style="display: none;"></div>
                     </div>
                 </div>
             </div>
-
-            <div class="col-12 col-lg-6 mb-4">
+            <div class="col-lg-6">
                 <div class="card">
                     <div class="card-header d-flex justify-content-between align-items-center">
                         <div class="d-flex align-items-center">
@@ -152,62 +262,6 @@
                                         {% endif %}
                                     </div>
                                     {% endif %}
-                                </div>
-                            </div>
-                            {% endfor %}
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="row">
-            <div class="col-12">
-                <div class="card">
-                    <div class="card-header d-flex justify-content-between align-items-center">
-                        <h5 class="card-title mb-0">Published Software Versions</h5>
-                        <div class="d-flex flex-column align-items-end">
-                            <button class="btn btn-primary" onclick="updateSoftware()">
-                                <i class="bi bi-cloud-arrow-down"></i> Update Software
-                            </button>
-                            <div id="updateError" class="alert alert-danger mt-2" style="display: none;"></div>
-                        </div>
-                    </div>
-                    <div class="card-body">
-                        <div class="row">
-                            {% for key, image in docker_versions.items() %}
-                            <div class="col-md-4 mb-3">
-                                <div class="version-item" id="version-{{ key }}">
-                                    <div class="version-header">
-                                        <div class="version-info">
-                                            <input type="checkbox" class="version-checkbox" id="{{ key }}-checkbox" 
-                                                   value="{{ key }}" {% if not image.name %}disabled{% endif %}>
-                                            <div class="version-name-container">
-                                                <span class="version-name-text {% if not image.name %}empty-name{% endif %}" onclick="startEdit(this)">
-                                                    {{ image.name or '+ Click here to set Docker image name' }}
-                                                </span>
-                                                <input type="text" class="form-control version-name-input" style="display: none;"
-                                                       value="{{ image.name }}" data-image-id="{{ key }}"
-                                                       placeholder="+ Click here to set Docker image name">
-                                            </div>
-                                        </div>
-                                        <div class="version-tags">
-                                            <select id="{{ key }}-version" class="form-select" 
-                                                    {% if not image.name %}disabled{% endif %}>
-                                                {% for tag in image.tags %}
-                                                    <option value="{{ tag }}">{{ tag }}</option>
-                                                {% endfor %}
-                                            </select>
-                                            <button onclick="refreshTags('{{ key }}')" class="btn btn-sm btn-light refresh-btn"
-                                                    {% if not image.name %}disabled{% endif %}>
-                                                <i class="bi bi-arrow-clockwise"></i>
-                                            </button>
-                                        </div>
-                                    </div>
-                                    <div class="last-updated">
-                                        Last updated: {{ image.last_updated or 'Never' }}
-                                    </div>
-                                    <div id="{{ key }}-error" class="error-message"></div>
                                 </div>
                             </div>
                             {% endfor %}

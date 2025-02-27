@@ -167,6 +167,9 @@ async def websocket_endpoint(
             elif data.get("type") == "update_image_name":
                 response = await websocket_manager.handle_update_image_name(data)
                 await websocket.send_json(response)
+            elif data.get("type") == "refresh_site":
+                response = await websocket_manager.handle_refresh_site(data)
+                await websocket.send_json(response)
     except WebSocketDisconnect:
         logger.info("WebSocket disconnected")
     except Exception as e:

@@ -2,6 +2,7 @@ from fastapi import WebSocket
 from typing import List
 from app.services.docker_hub import DockerHubService
 from app.utils.logger import logger
+from app.services.github import fetchSiteReleases
 
 class ConnectionManager:
     def __init__(self):
@@ -90,6 +91,25 @@ class ConnectionManager:
                 "image_id": image_id,
                 "status": "error",
                 "message": f"Failed to update image name: {str(e)}"
+            }
+
+    async def handle_refresh_site(self, data: dict) -> dict:
+        try:
+            repository = data.get("repository")
+            info = await fetchSiteReleases(repository)
+            return {
+                "type": "refresh_site_response",
+                "repository": repository,
+                "status": "success",
+                "info": info
+            }
+        except Exception as e:
+            logger.error(f"Failed to fetch site info for {repository}: {str(e)}")
+            return {
+                "type": "refresh_site_response",
+                "repository": repository,
+                "status": "error",
+                "message": f"Failed to fetch repository: {str(e)}"
             }
 
 manager = ConnectionManager() 
