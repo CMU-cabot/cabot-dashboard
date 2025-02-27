@@ -150,6 +150,9 @@ function initWebSocket() {
             // Request initial state
             console.log('Requesting initial state...');
             ws.send(JSON.stringify({ type: 'refresh' }));
+            setTimeout(() => {
+                refreshTags('Dockerhub1');
+            }, 1000);
         };
         
         ws.onclose = (event) => {
