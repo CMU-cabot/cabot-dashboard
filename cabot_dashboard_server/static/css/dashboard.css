@@ -460,3 +460,7 @@ body {
     background-color: #fee;
     width: calc(50% - 6px);
 }
+
+.robot-list {
+    max-height: unset;
+}
