@@ -1312,7 +1312,7 @@ function showSiteUpdateConfirmDialog(robots, siteRepo, siteVersion, siteName) {
 function addEnvRow() {
     var newRow = `<tr>
         <td><input type="text" class="form-control" name="key[]"></td>
-        <td><input type="text" class="form-control" name="value[]"></td>
+        <td width="100%"><input type="text" class="form-control" name="value[]"></td>
         <td><button type="button" class="btn btn-outline-danger btn-sm refresh-btn remove-row"><i class="bi bi-trash"></i></button></td>
     </tr>`;
     document.querySelector('#envTable tbody').insertAdjacentHTML('beforeend', newRow);
