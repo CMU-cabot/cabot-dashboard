@@ -21,9 +21,14 @@ case $1 in
     get-env)
         args="cat ~/cabot_ws/cabot/.env";;
     software_update)
-        echo CABOT_LAUNCH_IMAGE_TAG=$2 > /tmp/update.env
-        ./remote-merge-env.sh /tmp/update.env
-        exit 0;;
+        ./remote-merge-env.sh $2
+        args="echo success";;
+    site_update)
+        ./remote-merge-env.sh $2
+        args="echo success";;
+    env_update)
+        ./remote-merge-env.sh $2
+        args="echo success";;
     *)
         args=$@;;
 esac

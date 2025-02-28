@@ -56,6 +56,8 @@ class CommandType(Enum):
     SYSTEM_POWEROFF = "system-poweroff"
     CABOT_IS_ACTIVE = "cabot-is-active"
     SOFTWARE_UPDATE = "software_update"
+    SITE_UPDATE = "site_update"
+    ENV_UPDATE = "env_update"
     GET_IMAGE_TAGS = "get-image-tags"
     GET_ENV = "get-env"
     DEBUG1 = "debug1"
@@ -225,6 +227,21 @@ class CabotDashboardClient:
             status_code, _ = await self._make_request(session, "post", f"send/{self.cabot_id}", data)
             return False if status_code == 404 else True
 
+        async def update_env(options, command_name):
+            if not options:
+                await send_status({"status": "error", "message": f"No options specified for {command_name}"})
+                return
+
+            await send_status({"status": "start", "message": f"Starting {command_name} with {len(options)} options ..."})
+            with open("/tmp/update.env", "w") as f:
+                for k, v in options.items():
+                    f.write(f"{k}={v}\n")
+            success, error = await self.system_command.execute([command_type, "/tmp/update.env"])
+            if success:
+                await send_status({"status": "success", "message": f"{command_name} completed successfully"})
+            else:
+                await send_status({"status": "error", "message": f"{command_name} failed: {error}"})
+
         try:
             cmd_type = CommandType(command_type)
 
@@ -235,12 +252,15 @@ class CabotDashboardClient:
                     await send_status({"status": "error", "message": "No images specified for software update"})
                     return
 
-                await send_status({"status": "start", "message": f"Starting software update for {len(images)} images..."})
-                success, error = await self.system_command.execute([command_type, images[0]["version"]])
-                if success:
-                    await send_status({"status": "success", "message": "Software update completed successfully"})
-                else:
-                    await send_status({"status": "error", "message": f"Software update failed: {error}"})
+                await update_env({"CABOT_LAUNCH_IMAGE_TAG": images[0]["version"]}, "Software update")
+
+            elif cmd_type == CommandType.SITE_UPDATE:
+                status_type = "site_update"
+                await update_env(command.get("commandOption", {}), "Site repository update")
+
+            elif cmd_type == CommandType.ENV_UPDATE:
+                status_type = "env_update"
+                await update_env(command.get("commandOption", {}), "Environment variable update")
 
             elif cmd_type == CommandType.GET_IMAGE_TAGS:
                 status_type = "image_tags"
