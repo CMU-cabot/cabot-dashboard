@@ -5,6 +5,7 @@ if [ -z "$1" ]; then
     exit 1
 fi
 
+options="-o StrictHostKeyChecking=no -i $CABOT_SSH_ID_FILE"
 case $1 in
     cabot-is-active)
         args="systemctl --user is-active cabot";;
@@ -22,17 +23,19 @@ case $1 in
         args="cat ~/cabot_ws/cabot/.env";;
     software_update)
         ./remote-merge-env.sh $2
-        args="echo success";;
+        scp $options -p ./host-setup.sh $CABOT_SSH_TARGET:/tmp/host-setup.sh
+        args="/tmp/host-setup.sh";;
     site_update)
         ./remote-merge-env.sh $2
-        args="echo success";;
+        scp $options -p ./host-setup.sh $CABOT_SSH_TARGET:/tmp/host-setup.sh
+        args="/tmp/host-setup.sh";;
     env_update)
         ./remote-merge-env.sh $2
-        args="echo success";;
+        scp $options -p ./host-setup.sh $CABOT_SSH_TARGET:/tmp/host-setup.sh
+        args="/tmp/host-setup.sh";;
     *)
         args=$@;;
 esac
 
 echo $args 1>&2
-options="-o StrictHostKeyChecking=no -i $CABOT_SSH_ID_FILE"
 ssh $options $CABOT_SSH_TARGET $args
