@@ -21,12 +21,13 @@ git checkout $CABOT_LAUNCH_IMAGE_TAG
 echo Done
 
 echo イメージとマップの取得
+rm -rf $CABOT_SITE_PKG_DIR
 mkdir -p $CABOT_SITE_PKG_DIR
 (./manage-pkg.sh -r $CABOT_SITE_REPO -v $CABOT_SITE_VERSION -d -u)
 # CABOT_SITE_PKG_DIRに依存。ないとpwdにダウンロード
 echo Done
 
-(./manage-pkg.sh -p $CABOT_LAUNCU_IMAGE_TAG)
+(./manage-pkg.sh -p $CABOT_LAUNCH_IMAGE_TAG)
 
 echo セットアップとインストール
 (./plugin-build.sh)
