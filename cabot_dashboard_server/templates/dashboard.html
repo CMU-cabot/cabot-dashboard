@@ -255,71 +255,7 @@
                     </div>
                     <div id="cabots" class="card-body">
                         <div class="robot-list">
-                            {% for robot in robots %}
-                            <div class="robot-card mb-3">
-                                <div class="d-flex justify-content-between align-items-start mb-2">
-                                    <div class="form-check">
-                                        <input class="form-check-input" type="checkbox" value="{{ robot.id }}">
-                                        <label class="form-check-label fw-bold">{{ robot.name }}</label>
-                                    </div>
-                                    <div class="text-end">
-                                        <div>
-                                            <span class="badge {% if robot.connected %}bg-success{% else %}bg-danger{% endif %} me-1">
-                                                {{ 'Connected' if robot.connected else 'Disconnected' }}
-                                            </span>
-                                            <span class="badge {% if robot.system_status == 'active' %}bg-primary{% elif robot.system_status == 'failed' %}bg-danger{% elif robot.system_status == 'inactive' %}bg-warning{% elif robot.system_status == 'deactivating' %}bg-info{% else %}bg-secondary{% endif %}">
-                                                {{ robot.system_status|title }}
-                                            </span>
-                                        </div>
-                                        <div class="text-muted small mt-1">Last Poll: {{ robot.last_poll }}</div>
-                                    </div>
-                                </div>
-                                {% if robot.images %}
-                                <div class="image-versions">
-                                    {% for image_name, tag in robot.images.items() %}
-                                    <div class="version-tag">
-                                        <strong>{{ image_name }}</strong>: {{ tag }}
-                                    </div>
-                                    {% endfor %}
-                                </div>
-                                {% endif %}
-                                {% if robot.env %}
-                                <div class="image-versions">
-                                    {% for image_name, tag in robot.env.items() %}
-                                    <div class="version-tag env-tag">
-                                        <strong>{{ image_name }}</strong>={{ tag }}
-                                    </div>
-                                    {% endfor %}
-                                </div>
-                                {% endif %}
-                                <div class="robot-info">
-                                    {% if robot.messages %}
-                                    <div class="message-area mb-2">
-                                        {% if not robot.image_tags and robot.connection_status == 'connected' %}
-                                        <div class="alert alert-info py-0 px-3 mb-0">
-                                            Please execute "Get Image Tags" to retrieve the current software versions.
-                                        </div>
-                                        {% endif %}
-                                        {% for msg in robot.messages %}
-                                        <div class="alert {% if msg.level == 'error' %}alert-danger{% elif msg.level == 'success' %}alert-success{% else %}alert-info{% endif %} py-0 px-3 mb-0">
-                                            <span class="text-muted me-2" style="font-size: 0.9em;">{{ msg.timestamp }}</span>
-                                            {{ msg.message }}
-                                        </div>
-                                        {% endfor %}
-                                        {% if robot.messages|length > 0 %}
-                                        <div class="text-end mt-2">
-                                            <button class="btn btn-sm btn-outline-secondary view-history-btn" 
-                                                    data-robot-id="{{ robot.id }}"
-                                                    data-messages="{{ robot.all_messages|tojson|replace('"', '&quot;') }}">
-                                                <i class="bi bi-clock-history"></i> View History
-                                            </button>
-                                        </div>
-                                        {% endif %}
-                                    </div>
-                                    {% endif %}
-                                </div>
-                            </div>
-                            {% endfor %}
+                            <div class="text-center text-muted p-3">Loading...</div>
                         </div>
                     </div>
                 </div>

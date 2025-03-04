@@ -494,6 +494,7 @@ function updateDashboard(data) {
         console.error('Robot list container not found');
         return;
     }
+    const visible_ids = [...document.querySelectorAll('.robot-list .accordion-collapse.collapse.show')].map(e=>e.id)
     robotList.innerHTML = '';
 
     if (!data.cabots || data.cabots.length === 0) {
@@ -536,46 +537,84 @@ function updateDashboard(data) {
                         <div class="text-muted small mt-1">Last Poll: ${formatDateTime(robot.last_poll)}</div>
                     </div>
                 </div>
-                ${Object.keys(robot.images || {}).length > 0 ? `
-                <div class="image-versions mb-2">
-                    ${Object.entries(robot.images || {}).map(([name, tag]) => 
-                        `<div class="version-tag">${name}: ${tag}</div>`
-                    ).join('')}
-                </div>
-                ` : robot.connected ? `
-                <div class="alert alert-info py-1 px-3 mb-2">
-                    <i class="bi bi-info-circle me-2"></i>Please execute "Get Image Tags" to retrieve the current software versions.
-                </div>
+                ${robot.env['CABOT_LAUNCH_IMAGE_TAG'] && robot.env['CABOT_SITE'] && robot.env['CABOT_SITE_VERSION'] ? `
+                <div class="text-muted ms-1 mb-2">Image Tag: ${robot.env['CABOT_LAUNCH_IMAGE_TAG']}, Site: ${robot.env['CABOT_SITE']}@${robot.env['CABOT_SITE_VERSION']}</div>
                 ` : ''}
-                <div class="image-versions mb-2">
-                    ${Object.entries(robot.env || {}).map(([name, tag]) => 
-                        `<div class="version-tag env-tag">${name}=${tag}</div>`
-                    ).join('')}
-                </div>
-                <div class="robot-info">
-                    ${robot.messages && robot.messages.length > 0 ? `
-                    <div class="message-area mb-2">
-                        ${robot.messages.map(msg => `
-                            <div class="alert ${msg.level === 'error' ? 'alert-danger' : 
-                                               msg.level === 'success' ? 'alert-success' : 
-                                               'alert-info'} py-0 px-3 mb-1">
-                                <span class="text-muted me-2" style="font-size: 0.9em;">
-                                    ${formatDateTime(msg.timestamp).split(' ')[1]}
-                                </span>
-                                ${msg.message}
+                <div class="accordion" id="parentAccordion-${robot.id}">
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-tag-${robot.id}">
+                                Image Tags
+                            </button>
+                        </h2>
+                        <div id="collapse-tag-${robot.id}" class="accordion-collapse collapse ${visible_ids.includes(`collapse-tag-${robot.id}`) ? 'show' : ''}" data-bs-parent="#parentAccordion-${robot.id}">
+                            <div class="accordion-body">
+                                ${Object.keys(robot.images || {}).length > 0 ? `
+                                <div class="image-versions mb-2">
+                                    ${Object.entries(robot.images || {}).map(([name, tag]) =>
+                                        `<div class="version-tag">${name}: ${tag}</div>`
+                                    ).join('')}
+                                </div>
+                                ` : robot.connected ? `
+                                <div class="alert alert-info py-1 px-3 mb-2">
+                                    <i class="bi bi-info-circle me-2"></i>Please execute "Get Image Tags" to retrieve the current software versions.
+                                </div>
+                                ` : ''}
                             </div>
-                        `).join('')}
+                        </div>
                     </div>
-                    ` : ''}
-                    ${robot.all_messages && robot.all_messages.length > 0 ? `
-                    <div class="text-end mt-2">
-                        <button class="btn btn-sm btn-outline-secondary view-history-btn" 
-                                data-robot-id="${robot.id}"
-                                data-messages='${JSON.stringify(robot.all_messages).replace(/'/g, "&#39;")}'>
-                            <i class="bi bi-clock-history"></i> View History
-                        </button>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-env-${robot.id}">
+                                Environment Variables
+                            </button>
+                        </h2>
+                        <div id="collapse-env-${robot.id}" class="accordion-collapse collapse ${visible_ids.includes(`collapse-env-${robot.id}`) ? 'show' : ''}" data-bs-parent="#parentAccordion-${robot.id}">
+                            <div class="accordion-body">
+                                <div class="image-versions mb-2">
+                                    ${Object.entries(robot.env || {}).map(([name, tag]) =>
+                                        `<div class="version-tag env-tag">${name}=${tag}</div>`
+                                    ).join('')}
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    ` : ''}
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-msg-${robot.id}">
+                                Messages
+                            </button>
+                        </h2>
+                        <div id="collapse-msg-${robot.id}" class="accordion-collapse collapse ${visible_ids.includes(`collapse-msg-${robot.id}`) ? 'show' : ''}" data-bs-parent="#parentAccordion-${robot.id}">
+                            <div class="accordion-body">
+                                <div class="robot-info">
+                                    ${robot.messages && robot.messages.length > 0 ? `
+                                    <div class="message-area mb-2">
+                                        ${robot.messages.map(msg => `
+                                            <div class="alert ${msg.level === 'error' ? 'alert-danger' :
+                                                            msg.level === 'success' ? 'alert-success' :
+                                                            'alert-info'} py-0 px-3 mb-1">
+                                                <span class="text-muted me-2" style="font-size: 0.9em;">
+                                                    ${formatDateTime(msg.timestamp).split(' ')[1]}
+                                                </span>
+                                                ${msg.message}
+                                            </div>
+                                        `).join('')}
+                                    </div>
+                                    ` : ''}
+                                    ${robot.all_messages && robot.all_messages.length > 0 ? `
+                                    <div class="text-end mt-2">
+                                        <button class="btn btn-sm btn-outline-secondary view-history-btn"
+                                                data-robot-id="${robot.id}"
+                                                data-messages='${JSON.stringify(robot.all_messages).replace(/'/g, "&#39;")}'>
+                                            <i class="bi bi-clock-history"></i> View History
+                                        </button>
+                                    </div>
+                                    ` : ''}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             `;
 
