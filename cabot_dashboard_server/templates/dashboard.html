@@ -32,26 +32,6 @@
                         <div class="card-body">
                             <div class="row g-2">
                                 <div class="col-6">
-                                    <button class="btn btn-success w-100" onclick="sendCommand('ros_start')">
-                                        <i class="bi bi-play-circle"></i> ROS Start
-                                    </button>
-                                </div>
-                                <div class="col-6">
-                                    <button class="btn btn-warning w-100" onclick="sendCommand('ros_stop')">
-                                        <i class="bi bi-stop-circle"></i> ROS Stop
-                                    </button>
-                                </div>
-                                <div class="col-6">
-                                    <button class="btn btn-primary w-100" onclick="sendCommand('reboot')">
-                                        <i class="bi bi-arrow-clockwise"></i> Reboot
-                                    </button>
-                                </div>
-                                <div class="col-6">
-                                    <button class="btn btn-danger w-100" onclick="sendCommand('power_off')">
-                                        <i class="bi bi-power"></i> Power Off
-                                    </button>
-                                </div>
-                                <div class="col-6">
                                     <button class="btn btn-info w-100" onclick="sendCommand('get-image-tags')">
                                         <i class="bi bi-cloud"></i> Get Image Tags
                                     </button>
@@ -70,12 +50,68 @@
                 <!-- Accordion for the remaining cards -->
                 <div class="accordion" id="parentAccordion">
                     <div class="accordion-item">
+                        <h2 class="accordion-header" id="headingThree">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseROS" aria-expanded="true" aria-controls="collapseROS">
+                                ROS Actions
+                            </button>
+                        </h2>
+                        <div id="collapseROS" class="accordion-collapse collapse show" aria-labelledby="headingROS" data-bs-parent="#parentAccordion">
+                            <div class="accordion-body">
+                                <div class="card">
+                                    <div class="card-body">
+                                        <div class="row g-2">
+                                            <div class="col-6">
+                                                <button class="btn btn-success w-100" onclick="sendCommand('ros_start','rosActionError')">
+                                                    <i class="bi bi-play-circle"></i> ROS Start
+                                                </button>
+                                            </div>
+                                            <div class="col-6">
+                                                <button class="btn btn-warning w-100" onclick="sendCommand('ros_stop','rosActionError')">
+                                                    <i class="bi bi-stop-circle"></i> ROS Stop
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div id="rosActionError" class="alert alert-danger mt-3" style="display: none;"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header" id="headingThree">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapsePower" aria-expanded="false" aria-controls="collapsePower">
+                                Power Actions
+                            </button>
+                        </h2>
+                        <div id="collapsePower" class="accordion-collapse collapse" aria-labelledby="headingPower" data-bs-parent="#parentAccordion">
+                            <div class="accordion-body">
+                                <div class="card">
+                                    <div class="card-body">
+                                        <div class="row g-2">
+                                            <div class="col-6">
+                                                <button class="btn btn-primary w-100" onclick="sendCommand('reboot','powerActionError')">
+                                                    <i class="bi bi-arrow-clockwise"></i> Reboot
+                                                </button>
+                                            </div>
+                                            <div class="col-6">
+                                                <button class="btn btn-danger w-100" onclick="sendCommand('power_off','powerActionError')">
+                                                    <i class="bi bi-power"></i> Power Off
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div id="powerActionError" class="alert alert-danger mt-3" style="display: none;"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="accordion-item">
                         <h2 class="accordion-header" id="headingOne">
-                            <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapseOne" aria-expanded="true" aria-controls="collapseOne">
+                            <button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapseOne" aria-expanded="false" aria-controls="collapseOne">
                                 Published Software Versions
                             </button>
                         </h2>
-                        <div id="collapseOne" class="accordion-collapse collapse show" aria-labelledby="headingOne" data-bs-parent="#parentAccordion">
+                        <div id="collapseOne" class="accordion-collapse collapse" aria-labelledby="headingOne" data-bs-parent="#parentAccordion">
                             <div class="accordion-body">
                                 <div class="card">
                                     <div class="card-body">

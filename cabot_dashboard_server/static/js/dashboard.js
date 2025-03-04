@@ -311,7 +311,7 @@ function updateConnectionStatus() {
 }
 
 // Show confirmation dialog
-function showConfirmDialog(command) {
+function showConfirmDialog(command, actionErrorDiv) {
     const dialog = document.getElementById('confirmDialog');
     const selectedRobotsList = document.getElementById('selectedRobots');
     const confirmButton = document.getElementById('confirmAction');
@@ -330,7 +330,7 @@ function showConfirmDialog(command) {
     });
 
     if (enabledRobots.length === 0) {
-        const actionError = document.getElementById('actionError');
+        const actionError = document.getElementById(actionErrorDiv || 'actionError');
         if (actionError) {
             actionError.textContent = 'No enabled robots selected.';
             actionError.style.display = 'block';
@@ -458,8 +458,8 @@ async function executeAction() {
 }
 
 // Send command to robot
-function sendCommand(command) {
-    const actionError = document.getElementById('actionError');
+function sendCommand(command, actionErrorDiv) {
+    const actionError = document.getElementById(actionErrorDiv || 'actionError');
     
     // Clear previous error message
     if (actionError) {
@@ -475,17 +475,19 @@ function sendCommand(command) {
         return;
     }
 
-    showConfirmDialog(command);
+    showConfirmDialog(command, actionErrorDiv);
 }
 
 // Update dashboard with new data
 function updateDashboard(data) {
     // Clear any existing error messages
-    const actionError = document.getElementById('actionError');
-    if (actionError) {
-        actionError.style.display = 'none';
-        actionError.textContent = '';
-    }
+    ['actionError', 'rosActionError', 'powerActionError'].forEach(actionErrorDiv => {
+        const actionError = document.getElementById(actionErrorDiv);
+        if (actionError) {
+            actionError.style.display = 'none';
+            actionError.textContent = '';
+        }
+    });
     
     const robotList = document.querySelector('.robot-list');
     if (!robotList) {
