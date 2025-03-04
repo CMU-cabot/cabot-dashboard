@@ -18,7 +18,7 @@ case $1 in
     system-poweroff)
         args="sudo systemctl poweroff";;
     get-image-tags)
-        args="docker images --format {{.Repository}}:{{.Tag}}";;
+        args="docker images --format {{.CreatedAt}}={{.Repository}}:{{.Tag}} | sort | cut -f 2 -d =";;
     get-env)
         args="cat ~/cabot_ws/cabot/.env";;
     software_update)
