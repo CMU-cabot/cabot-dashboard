@@ -571,11 +571,17 @@ function updateDashboard(data) {
                         </h2>
                         <div id="collapse-env-${robot.id}" class="accordion-collapse collapse ${visible_ids.includes(`collapse-env-${robot.id}`) ? 'show' : ''}" data-bs-parent="#parentAccordion-${robot.id}">
                             <div class="accordion-body">
+                                ${Object.keys(robot.env || {}).length > 0 ? `
                                 <div class="image-versions mb-2">
                                     ${Object.entries(robot.env || {}).map(([name, tag]) =>
                                         `<div class="version-tag env-tag">${name}=${tag}</div>`
                                     ).join('')}
                                 </div>
+                                ` : robot.connected ? `
+                                <div class="alert alert-info py-1 px-3 mb-2">
+                                    <i class="bi bi-info-circle me-2"></i>Please execute "Get Environment Variables" to retrieve the current environment variables.
+                                </div>
+                                ` : ''}
                             </div>
                         </div>
                     </div>
