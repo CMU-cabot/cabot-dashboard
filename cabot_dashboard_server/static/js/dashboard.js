@@ -548,7 +548,7 @@ function updateDashboard(data) {
                     <span class="badge bg-primary me-1">${robot.env['CABOT_LAUNCH_IMAGE_TAG']}</span>
                     ` : ''}
                     ${robot.env['CABOT_SITE'] && robot.env['CABOT_SITE_VERSION'] ? `
-                    <span class="badge bg-info me-1">${robot.env['CABOT_SITE']}@${robot.env['CABOT_SITE_VERSION']}</span>
+                    <span class="badge bg-primary me-1">${robot.env['CABOT_SITE']}@${robot.env['CABOT_SITE_VERSION']}</span>
                     ` : ''}
                 </div>
                 <div class="accordion" id="parentAccordion-${robot.id}">
