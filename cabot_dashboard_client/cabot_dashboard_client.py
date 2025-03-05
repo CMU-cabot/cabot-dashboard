@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from typing import Optional, Tuple, Dict, Any, Union
 import json
 import random
+import sys
 
 
 @dataclass
@@ -363,7 +364,7 @@ async def main():
         cabot_id = os.environ.get("CABOT_NAME")
         if not cabot_id:
             logging.error("Environment variable CABOT_NAME is not set")
-            return
+            sys.exit(1)
 
         client = CabotDashboardClient(cabot_id)
         await client.run()
@@ -376,3 +377,4 @@ if __name__ == "__main__":
         pass
     except Exception as e:
         logging.critical(f"Unexpected error in main process: {e}")
+        sys.exit(2)
