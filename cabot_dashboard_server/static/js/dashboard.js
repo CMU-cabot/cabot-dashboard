@@ -533,8 +533,11 @@ function updateDashboard(data) {
                                                'bg-secondary'}">
                                 ${robot.system_status ? robot.system_status.charAt(0).toUpperCase() + robot.system_status.slice(1) : 'Unknown'}
                             </span>
-                            <span class="badge bg-info ms-1">
-                                Disk ${robot.disk_usage}
+                            <span class="badge ${robot.disk_usage.value > 75 ? 'bg-danger' :
+                                robot.disk_usage.value > 50 ? 'bg-warning' :
+                                robot.disk_usage.value >= 0 ? 'bg-primary' :
+                                'bg-secondary'} ms-1">
+                                Disk ${robot.disk_usage.text}
                             </span>
                         </div>
                         <div class="text-muted small mt-1">Last Poll: ${formatDateTime(robot.last_poll)}</div>

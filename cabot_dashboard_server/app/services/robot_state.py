@@ -5,6 +5,7 @@ from app.config import settings
 from app.services.websocket import manager as websocket_manager
 import asyncio
 import json
+import re
 
 class RobotStateManager:
     _instance = None
@@ -215,6 +216,9 @@ class RobotStateManager:
                 except Exception as e:
                     logger.error(f"Error processing message timestamp: {e}")
             
+            disk_usage_text = robot.get('disk_usage', 'unknown')
+            m = re.match(r"(\d+)%", disk_usage_text)
+            disk_usage_value = int(m.group(1)) if m else -1
             cabot_list.append({
                 'id': robot_id,
                 'name': robot.get('name', robot_id),
@@ -225,7 +229,7 @@ class RobotStateManager:
                 'images': robot.get('images', {}),
                 'env': robot.get('env', {}),
                 'system_status': robot.get('system_status', 'unknown'),  # Add system_status
-                'disk_usage': robot.get('disk_usage', 'unknown')  # Add disk_usage
+                'disk_usage': {"text": disk_usage_text, "value": disk_usage_value}
             })
         return cabot_list
 
