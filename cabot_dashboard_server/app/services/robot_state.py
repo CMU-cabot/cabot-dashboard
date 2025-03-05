@@ -22,6 +22,7 @@ class RobotStateManager:
                 "id": cabot_id,
                 "status": "unknown",
                 "system_status": "unknown",
+                "disk_usage": "unknown",
                 "last_poll": None,
                 "connected": False,
                 "images": {},
@@ -57,6 +58,7 @@ class RobotStateManager:
             "id": client_id,
             "status": state.get("status", "unknown"),
             "system_status": state.get("system_status", "unknown"),
+            "disk_usage": state.get("disk_usage", "unknown"),
             "last_poll": datetime.now().isoformat(),
             "connected": True if state.get("status") == "connected" else False,
             "images": current_state.get("images", {}),
@@ -222,7 +224,8 @@ class RobotStateManager:
                 'all_messages': all_messages,  # All messages for history view
                 'images': robot.get('images', {}),
                 'env': robot.get('env', {}),
-                'system_status': robot.get('system_status', 'unknown')  # Add system_status
+                'system_status': robot.get('system_status', 'unknown'),  # Add system_status
+                'disk_usage': robot.get('disk_usage', 'unknown')  # Add disk_usage
             })
         return cabot_list
 
