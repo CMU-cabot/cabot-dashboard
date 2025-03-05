@@ -60,6 +60,7 @@ class CommandType(Enum):
     ENV_UPDATE = "env_update"
     GET_IMAGE_TAGS = "get-image-tags"
     GET_ENV = "get-env"
+    GET_DISK_USAGE = "get-disk-usage"
     DEBUG1 = "debug1"
     DEBUG2 = "debug2"
 
@@ -334,7 +335,8 @@ class CabotDashboardClient:
                         while True:
                             cabot_system_status = await self.get_cabot_system_status()
                             self.logger.debug(f"Add status to poll request: {cabot_system_status}")
-                            status_code, data = await self._make_request(session, "get", f"poll/{self.cabot_id}", {"cabot_system_status": cabot_system_status})
+                            _, cabot_disk_usage = await self.system_command.execute([CommandType.GET_DISK_USAGE.value])
+                            status_code, data = await self._make_request(session, "get", f"poll/{self.cabot_id}", {"cabot_system_status": cabot_system_status, "cabot_disk_usage": cabot_disk_usage})
 
                             if status_code == 200:
                                 await self.handle_command(session, data)
