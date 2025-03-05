@@ -533,19 +533,24 @@ function updateDashboard(data) {
                                                'bg-secondary'}">
                                 ${robot.system_status ? robot.system_status.charAt(0).toUpperCase() + robot.system_status.slice(1) : 'Unknown'}
                             </span>
-                            <span class="badge ${robot.disk_usage.value > 75 ? 'bg-danger' :
-                                robot.disk_usage.value > 50 ? 'bg-warning' :
-                                robot.disk_usage.value >= 0 ? 'bg-primary' :
+                            <span class="badge ${robot.disk_usage.value > 90 ? 'bg-danger' :
+                                robot.disk_usage.value > 70 ? 'bg-warning' :
+                                robot.disk_usage.value >= 0 ? 'bg-success' :
                                 'bg-secondary'} ms-1">
-                                Disk ${robot.disk_usage.text}
+                                ${robot.disk_usage.text}
                             </span>
                         </div>
                         <div class="text-muted small mt-1">Last Poll: ${formatDateTime(robot.last_poll)}</div>
                     </div>
                 </div>
-                ${robot.env['CABOT_LAUNCH_IMAGE_TAG'] && robot.env['CABOT_SITE'] && robot.env['CABOT_SITE_VERSION'] ? `
-                <div class="text-muted ms-1 mb-2">Image Tag: ${robot.env['CABOT_LAUNCH_IMAGE_TAG']}, Site: ${robot.env['CABOT_SITE']}@${robot.env['CABOT_SITE_VERSION']}</div>
-                ` : ''}
+                <div class="mb-2">
+                    ${robot.env['CABOT_LAUNCH_IMAGE_TAG'] ? `
+                    <span class="badge bg-primary me-1">${robot.env['CABOT_LAUNCH_IMAGE_TAG']}</span>
+                    ` : ''}
+                    ${robot.env['CABOT_SITE'] && robot.env['CABOT_SITE_VERSION'] ? `
+                    <span class="badge bg-info me-1">${robot.env['CABOT_SITE']}@${robot.env['CABOT_SITE_VERSION']}</span>
+                    ` : ''}
+                </div>
                 <div class="accordion" id="parentAccordion-${robot.id}">
                     <div class="accordion-item">
                         <h2 class="accordion-header">
