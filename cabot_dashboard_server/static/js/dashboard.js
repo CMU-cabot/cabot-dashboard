@@ -655,29 +655,6 @@ function updateDashboard(data) {
     updateSelectAllCheckbox();
 }
 
-// Format date time
-function formatDateTime(dateTimeString) {
-    if (!dateTimeString) return 'Unknown';
-    
-    try {
-        // Convert UTC string to Date object and display in JST
-        const date = new Date(dateTimeString + 'Z');
-        return date.toLocaleString('en-US', { 
-            timeZone: 'Asia/Tokyo',
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit',
-            hour12: false
-        }).replace(/\//g, '/');
-    } catch (error) {
-        console.error('Error formatting date:', error);
-        return dateTimeString;  // Return original string on error
-    }
-}
-
 // Handle tags response
 function handleTagsResponse(data) {
     const imageId = data.image_id;
@@ -719,16 +696,7 @@ function handleTagsResponse(data) {
     // Update last updated timestamp
     const lastUpdated = versionItem.querySelector('.last-updated');
     if (lastUpdated) {
-        lastUpdated.textContent = `Last updated: ${new Date().toLocaleString('ja-JP', { 
-            timeZone: 'Asia/Tokyo',
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit',
-            hour12: false
-        }).replace(/\//g, '/')}`;
+        lastUpdated.textContent = `Last updated: ${formatDateTime(new Date().toString())}`;
     }
 
     if (errorDiv) {
@@ -1190,7 +1158,13 @@ function showLogDialogFromButton(button) {
 // Initialize Docker Hub version items
 function initializeDockerVersions() {
     console.log('Initializing Docker Hub versions...');
-    
+    for (const lastUpdated of document.querySelectorAll('.last-updated')) {
+        const m = lastUpdated.textContent.trim().match(/^(Last updated:) ([\d\-:.+T]+)$/);
+        if (m) {
+            lastUpdated.textContent = `${m[1]} ${formatDateTime(m[2])}`;
+        }
+    }
+
     // Initialize Docker Hub version items
     const dockerVersions = window.dockerVersions || {};
     Object.entries(dockerVersions).forEach(([key, image]) => {
