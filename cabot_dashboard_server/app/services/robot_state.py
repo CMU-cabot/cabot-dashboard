@@ -19,7 +19,7 @@ class RobotStateManager:
             cls._instance.POLLING_TIMEOUT = settings.polling_timeout
             cls._instance.MAX_MESSAGES = 100  # Maximum number of messages to retain per robot
             cls._instance.DISPLAY_MESSAGES = 5  # Number of messages to display
-            cls._instance.DISCONNECT_DETECTION_SECOND = 10 * 60
+            cls._instance.DISCONNECT_DETECTION_SECOND = 3 * 60
             cls._instance.scheduler = BackgroundScheduler()
             cls._instance.scheduler.add_job(cls._instance.disconnect_detection_handler, 'interval', seconds=5)
             cls._instance.scheduler.start()
@@ -236,6 +236,7 @@ class RobotStateManager:
                 'system_status': robot.get('system_status', 'unknown'),  # Add system_status
                 'disk_usage': {"text": disk_usage_text, "value": disk_usage_value}
             })
+        cabot_list.sort(key=lambda x: x['id'])
         return cabot_list
 
     async def send_command(self, robot_id: str, command: Dict) -> None:
@@ -288,6 +289,8 @@ class RobotStateManager:
     def disconnect_detection_handler(self):
         changed = False
         for robot_id, robot in self.connected_cabots.copy().items():
+            if robot_id in settings.allowed_cabot_id_list:
+                continue
             last_poll = robot.get("last_poll")
             if last_poll and (datetime.now(timezone.utc) - datetime.fromisoformat(last_poll)).total_seconds() > self.DISCONNECT_DETECTION_SECOND:
                 self.connected_cabots.pop(robot_id)

@@ -1217,6 +1217,7 @@ function initializeDockerVersions() {
 
 // Format date time
 function formatDateTime(dateString) {
+    if (!dateString) return 'Never';
     try {
         const date = new Date(dateString);
         return date.toLocaleString();
