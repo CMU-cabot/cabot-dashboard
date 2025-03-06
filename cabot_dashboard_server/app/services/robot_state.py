@@ -3,6 +3,7 @@ from datetime import datetime, timezone
 from app.utils.logger import logger
 from app.config import settings
 from app.services.websocket import manager as websocket_manager
+from apscheduler.schedulers.background import BackgroundScheduler
 import asyncio
 import json
 import re
@@ -18,6 +19,10 @@ class RobotStateManager:
             cls._instance.POLLING_TIMEOUT = settings.polling_timeout
             cls._instance.MAX_MESSAGES = 100  # Maximum number of messages to retain per robot
             cls._instance.DISPLAY_MESSAGES = 5  # Number of messages to display
+            cls._instance.DISCONNECT_DETECTION_SECOND = 10 * 60
+            cls._instance.scheduler = BackgroundScheduler()
+            cls._instance.scheduler.add_job(cls._instance.disconnect_detection_handler, 'interval', seconds=5)
+            cls._instance.scheduler.start()
         for cabot_id in settings.allowed_cabot_id_list:
             cls._instance.connected_cabots[cabot_id] = {
                 "id": cabot_id,
@@ -279,3 +284,14 @@ class RobotStateManager:
             reverse=True
         )
         return robot_state
+
+    def disconnect_detection_handler(self):
+        changed = False
+        for robot_id, robot in self.connected_cabots.copy().items():
+            last_poll = robot.get("last_poll")
+            if last_poll and (datetime.now(timezone.utc) - datetime.fromisoformat(last_poll)).total_seconds() > self.DISCONNECT_DETECTION_SECOND:
+                self.connected_cabots.pop(robot_id)
+                changed = True
+                logger.info(f"Robot {robot_id} disconnected")
+        if changed:
+            asyncio.run(self._notify_state_change())
