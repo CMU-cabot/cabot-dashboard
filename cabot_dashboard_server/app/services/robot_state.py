@@ -1,5 +1,5 @@
 from typing import Dict, List
-from datetime import datetime
+from datetime import datetime, timezone
 from app.utils.logger import logger
 from app.config import settings
 from app.services.websocket import manager as websocket_manager
@@ -60,7 +60,7 @@ class RobotStateManager:
             "status": state.get("status", "unknown"),
             "system_status": state.get("system_status", "unknown"),
             "disk_usage": state.get("disk_usage", "unknown"),
-            "last_poll": datetime.now().isoformat(),
+            "last_poll": datetime.now(timezone.utc).isoformat(),
             "connected": True if state.get("status") == "connected" else False,
             "images": current_state.get("images", {}),
             "env": current_state.get("env", {}),
@@ -80,7 +80,7 @@ class RobotStateManager:
             # Update only the polling-related fields
             updated_state.update({
                 "status": "connected",
-                'last_poll': datetime.now().isoformat()
+                'last_poll': datetime.now(timezone.utc).isoformat()
             })
             
             # Update the state atomically
@@ -112,7 +112,7 @@ class RobotStateManager:
         if robot_id not in self.connected_cabots:
             return
         
-        timestamp = datetime.now().isoformat()
+        timestamp = datetime.now(timezone.utc).isoformat()
         new_message = {
             'timestamp': timestamp,
             'message': message,
@@ -198,7 +198,7 @@ class RobotStateManager:
 
     def get_connected_cabots_list(self):
         cabot_list = []
-        current_time = datetime.now()
+        current_time = datetime.now(timezone.utc)
         
         for robot_id, robot in self.connected_cabots.items():
             # Get all messages and sort by timestamp in descending order
@@ -237,13 +237,13 @@ class RobotStateManager:
         if robot_id not in self.connected_cabots:
             raise ValueError(f"Robot {robot_id} not connected")
         self.connected_cabots[robot_id].update({
-            'last_command': datetime.now().isoformat(),
+            'last_command': datetime.now(timezone.utc).isoformat(),
             'last_command_type': command.get('type')
         })
         asyncio.create_task(self._notify_state_change())
 
     def add_message(self, client_id: str, message: str, level: str = "info"):
-        timestamp = datetime.now().isoformat()
+        timestamp = datetime.now(timezone.utc).isoformat()
         
         new_message = {
             "timestamp": timestamp,

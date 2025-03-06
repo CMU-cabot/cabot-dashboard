@@ -1,10 +1,10 @@
 import httpx
 import json
-from datetime import datetime
-import pytz
+from datetime import datetime, timezone
+# import pytz
 from typing import Dict, List, Optional
 import logging
-from app.config import settings
+# from app.config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -69,8 +69,9 @@ class DockerHubService:
                 common_tags &= tags
 
         tags = sorted(list(common_tags), reverse=True)
-        tz = pytz.timezone(settings.timezone)
-        current_time = datetime.now(tz).strftime('%Y/%m/%d %H:%M:%S')
+        # tz = pytz.timezone(settings.timezone)
+        # current_time = datetime.now(tz).strftime('%Y/%m/%d %H:%M:%S')
+        current_time = datetime.now(timezone.utc).isoformat()
         self._tags_cache[repository].update({
             "tags": tags,
             "last_updated": current_time
@@ -89,8 +90,9 @@ class DockerHubService:
         if repository not in self._tags_cache:
             return False
         
-        tz = pytz.timezone(settings.timezone)
-        current_time = datetime.now(tz).strftime('%Y/%m/%d %H:%M:%S')
+        # tz = pytz.timezone(settings.timezone)
+        # current_time = datetime.now(tz).strftime('%Y/%m/%d %H:%M:%S')
+        current_time = datetime.now(timezone.utc).isoformat()
         
         self._tags_cache[repository].update({
             'name': name,
