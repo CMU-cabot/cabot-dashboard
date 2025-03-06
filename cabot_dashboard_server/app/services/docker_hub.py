@@ -8,7 +8,6 @@ from app.config import settings
 
 logger = logging.getLogger(__name__)
 
-EXCLUDED_TAGS = set(["latest", "main"])
 CABOT_IMAGES = [
     "cabot-app-server",
     "cabot-bag",
@@ -23,6 +22,7 @@ CABOT_IMAGES = [
     "cabot-people-framos",
     "cabot-people-nuc",
 ]
+EXCLUDED_TAGS = ["latest", "main"]
 
 class DockerHubService:
     _instance = None
@@ -45,23 +45,29 @@ class DockerHubService:
             self._base_url = "https://hub.docker.com/v2"
             self._initialized = True
 
-    async def load_each_tags(self, image_name: str, organization: str = "cmucal") -> List[str]:
+    async def load_image_names(self, organization: str = "cmucal") -> List[str]:
+        async with httpx.AsyncClient() as client:
+            url = f"{self._base_url}/repositories/{organization}/"
+            response = await client.get(url, params={"page_size": 100, "ordering": "name"})
+            response.raise_for_status()
+            return [result["name"] for result in response.json()["results"] if result['name'] in CABOT_IMAGES]
+
+    async def load_image_tags(self, image_name: str, organization: str = "cmucal") -> List[str]:
         async with httpx.AsyncClient() as client:
             url = f"{self._base_url}/repositories/{organization}/{image_name}/tags"
             response = await client.get(url, params={"page_size": 100, "ordering": "last_updated"})
             response.raise_for_status()
-            return [result["name"] for result in response.json()["results"]]
+            return [result["name"] for result in response.json()["results"] if result["name"] not in EXCLUDED_TAGS]
 
     async def fetch_tags(self, repository: str, organization: str = "cmucal") -> List[str]:
         common_tags = None
-        for image_name in CABOT_IMAGES:
-            tags = set(await self.load_each_tags(image_name, organization))
+        for image_name in await self.load_image_names(organization):
+            tags = set(await self.load_image_tags(image_name, organization))
             if common_tags is None:
                 common_tags = tags
             else:
                 common_tags &= tags
 
-        common_tags -= EXCLUDED_TAGS
         tags = sorted(list(common_tags), reverse=True)
         tz = pytz.timezone(settings.timezone)
         current_time = datetime.now(tz).strftime('%Y/%m/%d %H:%M:%S')
