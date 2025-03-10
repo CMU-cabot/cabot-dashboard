@@ -1044,7 +1044,11 @@ function handleSoftwareUpdateResponse(data) {
 }
 
 // Filter robots
-function filterRobots(filter) {
+function filterRobots(filter, element) {
+    element.closest('.dropdown').querySelectorAll('.dropdown-item').forEach(item => {
+        item.classList.remove('active');
+    });
+    element.classList.add('active');
     currentFilter = filter;
     const robotList = document.querySelector('.robot-list');
     if (!robotList) return;
