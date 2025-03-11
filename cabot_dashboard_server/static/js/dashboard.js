@@ -3,10 +3,12 @@ let ws = null;
 let isConnected = false;
 let selectedRobots = new Set();
 let currentFilter = 'all';
+let currentSearch = '';
 let robotStateManager = null;
 let totalRobots = 0;
 let reconnectAttempts = 0;
 let connectionTimeout = null;
+let lastData = null;
 const MAX_RECONNECT_ATTEMPTS = 3;
 const CONNECTION_TIMEOUT_MS = 10000; // 10 seconds
 
@@ -480,6 +482,8 @@ function sendCommand(command, actionErrorDiv) {
 
 // Update dashboard with new data
 function updateDashboard(data) {
+    data = data || lastData;
+    lastData = data;
     // Clear any existing error messages
     ['actionError', 'rosActionError', 'powerActionError'].forEach(actionErrorDiv => {
         const actionError = document.getElementById(actionErrorDiv);
@@ -510,6 +514,9 @@ function updateDashboard(data) {
         if (currentFilter === 'all' ||
             (currentFilter === 'connected' && robot.connected) ||
             (currentFilter === 'disconnected' && !robot.connected)) {
+            if (currentSearch != '' && !robot.id.toLowerCase().includes(currentSearch)) {
+                return;
+            }
             
             const robotCard = document.createElement('div');
             robotCard.className = 'robot-card mb-3';
@@ -1050,18 +1057,14 @@ function filterRobots(filter, element) {
     });
     element.classList.add('active');
     currentFilter = filter;
-    const robotList = document.querySelector('.robot-list');
-    if (!robotList) return;
-
-    // Clear selected robots when filter changes
     selectedRobots.clear();
-    updateSelectedCount();
-    updateSelectAllCheckbox();
+    updateDashboard();
+}
 
-    // Request latest data
-    if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: 'refresh' }));
-    }
+function searchRobots(text) {
+    currentSearch = text.trim().toLowerCase();
+    selectedRobots.clear();
+    updateDashboard();
 }
 
 // Show log dialog
