@@ -447,3 +447,20 @@ body {
 .log-level-info {
     color: #0d6efd;
 }
+
+.version-info {
+    display: none;
+}
+
+.version-tag {
+    background-color: #eef;
+}
+
+.env-tag {
+    background-color: #fee;
+    width: calc(50% - 6px);
+}
+
+.robot-list {
+    max-height: 75vh;
+}

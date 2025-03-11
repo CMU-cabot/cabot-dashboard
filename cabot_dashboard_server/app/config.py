@@ -29,7 +29,6 @@ class Settings(BaseSettings):
     jwt_secret_key: str = os.getenv("CABOT_DASHBOARD_JWT_SECRET_KEY", "your-jwt-secret-key-here")
     algorithm: str = "HS256"
     client_config: ClientConfig = ClientConfig()
-    timezone: str = os.getenv('CABOT_DASHBOARD_TIMEZONE', 'Asia/Tokyo')
 
     # CORS settings
     cors_origins: List[str] = os.getenv("CABOT_DASHBOARD_CORS_ORIGINS", "http://localhost:8000").split(",")

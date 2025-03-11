@@ -68,11 +68,13 @@ async def poll(
     try:
         body = await request.json()
         system_status = body.get("cabot_system_status", "unknown")
+        disk_usage = body.get("cabot_disk_usage", "unknown")
         logger.debug(f"Received poll request from {client_id} with system_status: {system_status}")
 
         state = {
             "status": "connected",
-            "system_status": system_status
+            "system_status": system_status,
+            "disk_usage": disk_usage
         }
         robot_manager.update_robot_state(client_id, state)
 
@@ -121,6 +123,16 @@ async def send_status(
                 logger.info(f"Updating image tags for {client_id}: {json.dumps(tags, indent=2)}")
                 robot_manager.update_robot_images(client_id, tags)
                 robot_manager.update_robot_message(client_id, "Image tags updated successfully", "success")
+            elif msg_status == "error":
+                robot_manager.update_robot_message(client_id, msg_content, "error")
+            else:
+                robot_manager.update_robot_message(client_id, msg_content, msg_status)
+        if msg_type == "env":
+            if msg_status == "success":
+                env = status.get("env", {})
+                logger.info(f"Updating environment variables for {client_id}: {json.dumps(env, indent=2)}")
+                robot_manager.update_robot_env(client_id, env)
+                robot_manager.update_robot_message(client_id, "Environment variables updated successfully", "success")
             elif msg_status == "error":
                 robot_manager.update_robot_message(client_id, msg_content, "error")
             else:

@@ -3,10 +3,12 @@ let ws = null;
 let isConnected = false;
 let selectedRobots = new Set();
 let currentFilter = 'all';
+let currentSearch = '';
 let robotStateManager = null;
 let totalRobots = 0;
 let reconnectAttempts = 0;
 let connectionTimeout = null;
+let lastData = null;
 const MAX_RECONNECT_ATTEMPTS = 3;
 const CONNECTION_TIMEOUT_MS = 10000; // 10 seconds
 
@@ -88,6 +90,7 @@ function initializeUI() {
 
     // Initialize Docker Hub version items
     initializeDockerVersions();
+    addEnvRow()
 }
 
 // Initialize WebSocket connection
@@ -149,6 +152,9 @@ function initWebSocket() {
             // Request initial state
             console.log('Requesting initial state...');
             ws.send(JSON.stringify({ type: 'refresh' }));
+            setTimeout(() => {
+                refreshTags('Dockerhub1');
+            }, 1000);
         };
         
         ws.onclose = (event) => {
@@ -193,6 +199,9 @@ function initWebSocket() {
                         break;
                     case 'update_software_response':
                         handleSoftwareUpdateResponse(data);
+                        break;
+                    case 'refresh_site_response':
+                        handleSiteResponse(data);
                         break;
                 }
             } catch (error) {
@@ -304,7 +313,7 @@ function updateConnectionStatus() {
 }
 
 // Show confirmation dialog
-function showConfirmDialog(command) {
+function showConfirmDialog(command, actionErrorDiv) {
     const dialog = document.getElementById('confirmDialog');
     const selectedRobotsList = document.getElementById('selectedRobots');
     const confirmButton = document.getElementById('confirmAction');
@@ -323,7 +332,7 @@ function showConfirmDialog(command) {
     });
 
     if (enabledRobots.length === 0) {
-        const actionError = document.getElementById('actionError');
+        const actionError = document.getElementById(actionErrorDiv || 'actionError');
         if (actionError) {
             actionError.textContent = 'No enabled robots selected.';
             actionError.style.display = 'block';
@@ -412,6 +421,18 @@ async function executeAction() {
                             images: selectedImages
                         };
                     }
+                } else if(currentAction === 'site_update') {
+                    commandOption = {
+                        'CABOT_SITE_REPO': document.getElementById('CABOT_SITE_REPO').value.trim(),
+                        'CABOT_SITE_VERSION': document.getElementById('CABOT_SITE_VERSION').value.trim(),
+                        'CABOT_SITE': document.getElementById('CABOT_SITE').value.trim()
+                    };
+                } else if(currentAction === 'env_update') {
+                    commandOption = {};
+                    for (const row of document.querySelectorAll('#envTable tbody tr')) {
+                        const input = row.querySelectorAll('input[type=text]');
+                        commandOption[input[0].value.trim()] = input[1].value.trim();
+                    }
                 }
 
                 const message = {
@@ -439,8 +460,8 @@ async function executeAction() {
 }
 
 // Send command to robot
-function sendCommand(command) {
-    const actionError = document.getElementById('actionError');
+function sendCommand(command, actionErrorDiv) {
+    const actionError = document.getElementById(actionErrorDiv || 'actionError');
     
     // Clear previous error message
     if (actionError) {
@@ -456,23 +477,28 @@ function sendCommand(command) {
         return;
     }
 
-    showConfirmDialog(command);
+    showConfirmDialog(command, actionErrorDiv);
 }
 
 // Update dashboard with new data
 function updateDashboard(data) {
+    data = data || lastData;
+    lastData = data;
     // Clear any existing error messages
-    const actionError = document.getElementById('actionError');
-    if (actionError) {
-        actionError.style.display = 'none';
-        actionError.textContent = '';
-    }
+    ['actionError', 'rosActionError', 'powerActionError'].forEach(actionErrorDiv => {
+        const actionError = document.getElementById(actionErrorDiv);
+        if (actionError) {
+            actionError.style.display = 'none';
+            actionError.textContent = '';
+        }
+    });
     
     const robotList = document.querySelector('.robot-list');
     if (!robotList) {
         console.error('Robot list container not found');
         return;
     }
+    const visible_ids = [...document.querySelectorAll('.robot-list .accordion-collapse.collapse.show')].map(e=>e.id)
     robotList.innerHTML = '';
 
     if (!data.cabots || data.cabots.length === 0) {
@@ -488,6 +514,9 @@ function updateDashboard(data) {
         if (currentFilter === 'all' ||
             (currentFilter === 'connected' && robot.connected) ||
             (currentFilter === 'disconnected' && !robot.connected)) {
+            if (currentSearch != '' && !robot.id.toLowerCase().includes(currentSearch)) {
+                return;
+            }
             
             const robotCard = document.createElement('div');
             robotCard.className = 'robot-card mb-3';
@@ -511,45 +540,105 @@ function updateDashboard(data) {
                                                'bg-secondary'}">
                                 ${robot.system_status ? robot.system_status.charAt(0).toUpperCase() + robot.system_status.slice(1) : 'Unknown'}
                             </span>
+                            <span class="badge ${robot.disk_usage.value > 90 ? 'bg-danger' :
+                                robot.disk_usage.value > 70 ? 'bg-warning' :
+                                robot.disk_usage.value >= 0 ? 'bg-success' :
+                                'bg-secondary'} ms-1">
+                                ${robot.disk_usage.text}
+                            </span>
                         </div>
                         <div class="text-muted small mt-1">Last Poll: ${formatDateTime(robot.last_poll)}</div>
                     </div>
                 </div>
-                ${Object.keys(robot.images || {}).length > 0 ? `
-                <div class="image-versions mb-2">
-                    ${Object.entries(robot.images || {}).map(([name, tag]) => 
-                        `<div class="version-tag">${name}: ${tag}</div>`
-                    ).join('')}
+                <div class="mb-2">
+                    ${robot.env['CABOT_LAUNCH_IMAGE_TAG'] ? `
+                    <span class="badge bg-primary me-1">${robot.env['CABOT_LAUNCH_IMAGE_TAG']}</span>
+                    ` : ''}
+                    ${robot.env['CABOT_SITE'] && robot.env['CABOT_SITE_VERSION'] ? `
+                    <span class="badge bg-primary me-1">${robot.env['CABOT_SITE']}@${robot.env['CABOT_SITE_VERSION']}</span>
+                    ` : ''}
                 </div>
-                ` : robot.connected ? `
-                <div class="alert alert-info py-1 px-3 mb-2">
-                    <i class="bi bi-info-circle me-2"></i>Please execute "Get Image Tags" to retrieve the current software versions.
-                </div>
-                ` : ''}
-                <div class="robot-info">
-                    ${robot.messages && robot.messages.length > 0 ? `
-                    <div class="message-area mb-2">
-                        ${robot.messages.map(msg => `
-                            <div class="alert ${msg.level === 'error' ? 'alert-danger' : 
-                                               msg.level === 'success' ? 'alert-success' : 
-                                               'alert-info'} py-0 px-3 mb-1">
-                                <span class="text-muted me-2" style="font-size: 0.9em;">
-                                    ${formatDateTime(msg.timestamp).split(' ')[1]}
-                                </span>
-                                ${msg.message}
+                <div class="accordion" id="parentAccordion-${robot.id}">
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-tag-${robot.id}">
+                                Image Tags
+                            </button>
+                        </h2>
+                        <div id="collapse-tag-${robot.id}" class="accordion-collapse collapse ${visible_ids.includes(`collapse-tag-${robot.id}`) ? 'show' : ''}" data-bs-parent="#parentAccordion-${robot.id}">
+                            <div class="accordion-body">
+                                ${Object.keys(robot.images || {}).length > 0 ? `
+                                <div class="image-versions mb-2">
+                                    ${Object.entries(robot.images || {}).map(([name, tag]) =>
+                                        `<div class="version-tag">${name}: ${tag}</div>`
+                                    ).join('')}
+                                </div>
+                                ` : robot.connected ? `
+                                <div class="alert alert-info py-1 px-3 mb-2">
+                                    <i class="bi bi-info-circle me-2"></i>Please execute "Get Image Tags" to retrieve the current software versions.
+                                </div>
+                                ` : ''}
                             </div>
-                        `).join('')}
+                        </div>
                     </div>
-                    ` : ''}
-                    ${robot.all_messages && robot.all_messages.length > 0 ? `
-                    <div class="text-end mt-2">
-                        <button class="btn btn-sm btn-outline-secondary view-history-btn" 
-                                data-robot-id="${robot.id}"
-                                data-messages='${JSON.stringify(robot.all_messages).replace(/'/g, "&#39;")}'>
-                            <i class="bi bi-clock-history"></i> View History
-                        </button>
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-env-${robot.id}">
+                                Environment Variables
+                            </button>
+                        </h2>
+                        <div id="collapse-env-${robot.id}" class="accordion-collapse collapse ${visible_ids.includes(`collapse-env-${robot.id}`) ? 'show' : ''}" data-bs-parent="#parentAccordion-${robot.id}">
+                            <div class="accordion-body">
+                                ${Object.keys(robot.env || {}).length > 0 ? `
+                                <div class="image-versions mb-2">
+                                    ${Object.entries(robot.env || {}).map(([name, tag]) =>
+                                        `<div class="version-tag env-tag">${name}=${tag}</div>`
+                                    ).join('')}
+                                </div>
+                                ` : robot.connected ? `
+                                <div class="alert alert-info py-1 px-3 mb-2">
+                                    <i class="bi bi-info-circle me-2"></i>Please execute "Get Environment Variables" to retrieve the current environment variables.
+                                </div>
+                                ` : ''}
+                            </div>
+                        </div>
                     </div>
-                    ` : ''}
+                    <div class="accordion-item">
+                        <h2 class="accordion-header">
+                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-msg-${robot.id}">
+                                Messages
+                            </button>
+                        </h2>
+                        <div id="collapse-msg-${robot.id}" class="accordion-collapse collapse ${visible_ids.includes(`collapse-msg-${robot.id}`) ? 'show' : ''}" data-bs-parent="#parentAccordion-${robot.id}">
+                            <div class="accordion-body">
+                                <div class="robot-info">
+                                    ${robot.messages && robot.messages.length > 0 ? `
+                                    <div class="message-area mb-2">
+                                        ${robot.messages.map(msg => `
+                                            <div class="alert ${msg.level === 'error' ? 'alert-danger' :
+                                                            msg.level === 'success' ? 'alert-success' :
+                                                            'alert-info'} py-0 px-3 mb-1">
+                                                <span class="text-muted me-2" style="font-size: 0.9em;">
+                                                    ${formatDateTime(msg.timestamp).split(' ')[1]}
+                                                </span>
+                                                ${msg.message}
+                                            </div>
+                                        `).join('')}
+                                    </div>
+                                    ` : ''}
+                                    ${robot.all_messages && robot.all_messages.length > 0 ? `
+                                    <div class="text-end mt-2">
+                                        <button class="btn btn-sm btn-outline-secondary view-history-btn"
+                                                data-robot-id="${robot.id}"
+                                                data-messages='${JSON.stringify(robot.all_messages).replace(/'/g, "&#39;")}'>
+                                            <i class="bi bi-clock-history"></i> View History
+                                        </button>
+                                    </div>
+                                    ` : ''}
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             `;
 
@@ -571,29 +660,6 @@ function updateDashboard(data) {
 
     updateSelectedCount();
     updateSelectAllCheckbox();
-}
-
-// Format date time
-function formatDateTime(dateTimeString) {
-    if (!dateTimeString) return 'Unknown';
-    
-    try {
-        // Convert UTC string to Date object and display in JST
-        const date = new Date(dateTimeString + 'Z');
-        return date.toLocaleString('en-US', { 
-            timeZone: 'Asia/Tokyo',
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit',
-            hour12: false
-        }).replace(/\//g, '/');
-    } catch (error) {
-        console.error('Error formatting date:', error);
-        return dateTimeString;  // Return original string on error
-    }
 }
 
 // Handle tags response
@@ -637,16 +703,7 @@ function handleTagsResponse(data) {
     // Update last updated timestamp
     const lastUpdated = versionItem.querySelector('.last-updated');
     if (lastUpdated) {
-        lastUpdated.textContent = `Last updated: ${new Date().toLocaleString('ja-JP', { 
-            timeZone: 'Asia/Tokyo',
-            year: 'numeric',
-            month: '2-digit',
-            day: '2-digit',
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit',
-            hour12: false
-        }).replace(/\//g, '/')}`;
+        lastUpdated.textContent = `Last updated: ${formatDateTime(new Date().toString())}`;
     }
 
     if (errorDiv) {
@@ -863,6 +920,7 @@ function updateMessageList(messages) {
 
 // Update software
 function updateSoftware() {
+    document.querySelector(".version-checkbox").checked=true
     const updateError = document.getElementById('updateError');
     
     // Clear previous error message
@@ -951,7 +1009,8 @@ function showUpdateConfirmDialog(robots, versions) {
     content += versions.map(v => {
         const nameText = document.querySelector(`#version-${v.image_id} .version-name-text`);
         const imageName = nameText ? nameText.textContent.trim() : v.image_id;
-        return `<li>${imageName}: ${v.tag}</li>`;
+        // return `<li>${imageName}: ${v.tag}</li>`;
+        return `<li>*: ${v.tag}</li>`;
     }).join('');
     selectedRobotsList.innerHTML = content;
     
@@ -992,20 +1051,20 @@ function handleSoftwareUpdateResponse(data) {
 }
 
 // Filter robots
-function filterRobots(filter) {
+function filterRobots(filter, element) {
+    element.closest('.dropdown').querySelectorAll('.dropdown-item').forEach(item => {
+        item.classList.remove('active');
+    });
+    element.classList.add('active');
     currentFilter = filter;
-    const robotList = document.querySelector('.robot-list');
-    if (!robotList) return;
-
-    // Clear selected robots when filter changes
     selectedRobots.clear();
-    updateSelectedCount();
-    updateSelectAllCheckbox();
+    updateDashboard();
+}
 
-    // Request latest data
-    if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: 'refresh' }));
-    }
+function searchRobots(text) {
+    currentSearch = text.trim().toLowerCase();
+    selectedRobots.clear();
+    updateDashboard();
 }
 
 // Show log dialog
@@ -1106,7 +1165,13 @@ function showLogDialogFromButton(button) {
 // Initialize Docker Hub version items
 function initializeDockerVersions() {
     console.log('Initializing Docker Hub versions...');
-    
+    for (const lastUpdated of document.querySelectorAll('.last-updated')) {
+        const m = lastUpdated.textContent.trim().match(/^(Last updated:) ([\d\-:.+T]+)$/);
+        if (m) {
+            lastUpdated.textContent = `${m[1]} ${formatDateTime(m[2])}`;
+        }
+    }
+
     // Initialize Docker Hub version items
     const dockerVersions = window.dockerVersions || {};
     Object.entries(dockerVersions).forEach(([key, image]) => {
@@ -1159,11 +1224,220 @@ function initializeDockerVersions() {
 
 // Format date time
 function formatDateTime(dateString) {
+    if (!dateString) return 'Never';
     try {
         const date = new Date(dateString);
         return date.toLocaleString();
     } catch (error) {
         console.error('Error formatting date:', error);
         return dateString;
+    }
+}
+
+async function onSiteUpdate() {
+    const repository = document.getElementById('CABOT_SITE_REPO').value.trim();
+
+    console.log('Selected site repository:', repository);
+    try {
+        ws.send(JSON.stringify({
+            type: 'refresh_site',
+            repository: repository
+        }));
+    } catch (error) {
+        console.error('Failed to refresh site:', error);
+        const errorDiv = document.getElementById('siteError');
+        errorDiv.textContent = error.message || 'Failed to refresh site';
+        errorDiv.style.display = 'block';
+    }
+}
+
+function handleSiteResponse(data) {
+    console.log(data);
+    const repository = data.repository;
+    const siteRepo = document.getElementById('CABOT_SITE_REPO');
+    const siteVersions = document.getElementById('CABOT_SITE_VERSION');
+    const siteName = document.getElementById('CABOT_SITE');
+    const errorDiv = document.getElementById('siteError');
+    siteVersions.innerHTML = '';
+
+    if (data.status === 'error') {
+        siteName.value = '';
+        errorDiv.textContent = data.message || 'Failed to fetch site reposiiotry';
+        errorDiv.style.display = 'block';
+        return;
+    }
+
+    errorDiv.style.display = 'none';
+    siteRepo.value = data.info.CABOT_SITE_REPO;
+    siteName.value = data.info.CABOT_SITE;
+    data.info.CABOT_SITE_VERSION.forEach(version => {
+        const option = document.createElement('option');
+        option.value = version;
+        option.textContent = version;
+        siteVersions.appendChild(option);
+    });
+}
+
+function updateSite() {
+    const errorDiv = document.getElementById('siteError');
+
+    // Clear previous error message
+    errorDiv.style.display = 'none';
+    errorDiv.textContent = '';
+
+    // Get only enabled robots
+    const enabledRobots = Array.from(selectedRobots).filter(robotId => {
+        const checkbox = document.querySelector(`.robot-checkbox[value="${robotId}"]`);
+        return checkbox && !checkbox.disabled;
+    });
+
+    if (enabledRobots.length === 0) {
+        errorDiv.textContent = 'Please select at least one enabled robot.';
+        errorDiv.style.display = 'block';
+        return;
+    }
+
+    const siteRepo = document.getElementById('CABOT_SITE_REPO').value.trim();
+    const siteVersion = document.getElementById('CABOT_SITE_VERSION').value.trim();
+    const siteName = document.getElementById('CABOT_SITE').value.trim();
+    if (!siteRepo || !siteVersion || !siteName) {
+        errorDiv.textContent = 'Please fill in all site information.';
+        errorDiv.style.display = 'block';
+        return;
+    }
+
+    showSiteUpdateConfirmDialog(new Set(enabledRobots), siteRepo, siteVersion, siteName);
+}
+
+// Show update confirmation dialog
+function showSiteUpdateConfirmDialog(robots, siteRepo, siteVersion, siteName) {
+    const dialog = document.getElementById('confirmDialog');
+    const selectedRobotsList = document.getElementById('selectedRobots');
+    const confirmButton = document.getElementById('confirmAction');
+    const dialogTitle = document.getElementById('dialogTitle');
+    const dialogOverlay = document.getElementById('dialogOverlay');
+
+    if (!dialog || !selectedRobotsList || !confirmButton || !dialogTitle || !dialogOverlay) {
+        console.error('Dialog elements not found');
+        return;
+    }
+
+    // Update dialog content
+    let content = '<h6>Selected AI Suitcases:</h6>';
+    content += Array.from(robots).map(robotId => `<li>${robotId}</li>`).join('');
+    content += '<h6 class="mt-3">Site Parameters:</h6>';
+    content += `<li>Site Repository: ${siteRepo}</li>`;
+    content += `<li>Version: ${siteVersion}</li>`;
+    content += `<li>Package Name: ${siteName}</li>`;
+    selectedRobotsList.innerHTML = content;
+
+    // Set current action and versions
+    currentAction = 'site_update';
+
+    // Update dialog title and button
+    dialogTitle.textContent = 'Confirm Site Update';
+    confirmButton.textContent = 'Update Site';
+
+    // Show overlay and dialog
+    dialogOverlay.style.display = 'flex';
+
+    // Clear any previous error messages
+    const errorDiv = document.getElementById('dialogError');
+    if (errorDiv) {
+        errorDiv.style.display = 'none';
+        errorDiv.textContent = '';
+    }
+}
+
+function addEnvRow() {
+    var newRow = `<tr>
+        <td><input type="text" class="form-control" name="key[]"></td>
+        <td width="100%"><input type="text" class="form-control" name="value[]"></td>
+        <td><button type="button" class="btn btn-outline-danger btn-sm refresh-btn remove-row"><i class="bi bi-trash"></i></button></td>
+    </tr>`;
+    document.querySelector('#envTable tbody').insertAdjacentHTML('beforeend', newRow);
+    const buttons = document.querySelectorAll('.remove-row');
+    buttons[buttons.length - 1].addEventListener('click', function() {
+        this.closest('tr').remove()
+    });
+}
+
+function updateEnv() {
+    const errorDiv = document.getElementById('envError');
+
+    // Clear previous error message
+    errorDiv.style.display = 'none';
+    errorDiv.textContent = '';
+
+    // Get only enabled robots
+    const enabledRobots = Array.from(selectedRobots).filter(robotId => {
+        const checkbox = document.querySelector(`.robot-checkbox[value="${robotId}"]`);
+        return checkbox && !checkbox.disabled;
+    });
+
+    if (enabledRobots.length === 0) {
+        errorDiv.textContent = 'Please select at least one enabled robot.';
+        errorDiv.style.display = 'block';
+        return;
+    }
+
+    const envList = {};
+    for (const row of document.querySelectorAll('#envTable tbody tr')) {
+        const input = row.querySelectorAll('input[type=text]');
+        const key = input[0].value.trim();
+        if (key) {
+            envList[key] = input[1].value.trim();
+        } else {
+            errorDiv.textContent = 'Environment key should not be empty.';
+            errorDiv.style.display = 'block';
+            return;
+        }
+    }
+    if (Object.keys(envList).length === 0) {
+        errorDiv.textContent = 'Please add at least one environment variable.';
+        errorDiv.style.display = 'block';
+        return;
+    }
+
+    showEnvUpdateConfirmDialog(new Set(enabledRobots), envList);
+}
+
+// Show update confirmation dialog
+function showEnvUpdateConfirmDialog(robots, envList) {
+    const dialog = document.getElementById('confirmDialog');
+    const selectedRobotsList = document.getElementById('selectedRobots');
+    const confirmButton = document.getElementById('confirmAction');
+    const dialogTitle = document.getElementById('dialogTitle');
+    const dialogOverlay = document.getElementById('dialogOverlay');
+
+    if (!dialog || !selectedRobotsList || !confirmButton || !dialogTitle || !dialogOverlay) {
+        console.error('Dialog elements not found');
+        return;
+    }
+
+    // Update dialog content
+    let content = '<h6>Selected AI Suitcases:</h6>';
+    content += Array.from(robots).map(robotId => `<li>${robotId}</li>`).join('');
+    content += '<h6 class="mt-3">Environment Variables:</h6>';
+    for (const [key, value] of Object.entries(envList)) {
+        content += `<li>${key}=${value}</li>`;
+    }
+    selectedRobotsList.innerHTML = content;
+
+    // Set current action and versions
+    currentAction = 'env_update';
+
+    // Update dialog title and button
+    dialogTitle.textContent = 'Confirm Environment Variable Update';
+    confirmButton.textContent = 'Update Environment Variables';
+
+    // Show overlay and dialog
+    dialogOverlay.style.display = 'flex';
+
+    // Clear any previous error messages
+    const errorDiv = document.getElementById('dialogError');
+    if (errorDiv) {
+        errorDiv.style.display = 'none';
+        errorDiv.textContent = '';
     }
 }

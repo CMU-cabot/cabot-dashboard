@@ -1,9 +1,11 @@
 #!/usr/bin/bash
+set -e
 
 if [ -z "$1" ]; then
     exit 1
 fi
 
+options="-o StrictHostKeyChecking=no -i $CABOT_SSH_ID_FILE"
 case $1 in
     cabot-is-active)
         args="systemctl --user is-active cabot";;
@@ -15,14 +17,27 @@ case $1 in
         args="sudo systemctl reboot";;
     system-poweroff)
         args="sudo systemctl poweroff";;
-    software_update)
-        shift; args="echo software_update $@";;
     get-image-tags)
-        args="docker images --format {{.Repository}}:{{.Tag}}";;
+        args="docker images --format {{.CreatedAt}}={{.Repository}}:{{.Tag}} | sort | cut -f 2 -d =";;
+    get-env)
+        args="cat ~/cabot_ws/cabot/.env";;
+    get-disk-usage)
+        args="df -ht ext4 | tail -1 | awk '{print \$5}'";;
+    software_update)
+        ./remote-merge-env.sh $2
+        scp $options -p ./host-setup.sh $CABOT_SSH_TARGET:/tmp/host-setup.sh
+        args="/tmp/host-setup.sh";;
+    site_update)
+        ./remote-merge-env.sh $2
+        scp $options -p ./host-setup.sh $CABOT_SSH_TARGET:/tmp/host-setup.sh
+        args="/tmp/host-setup.sh";;
+    env_update)
+        ./remote-merge-env.sh $2
+        scp $options -p ./host-setup.sh $CABOT_SSH_TARGET:/tmp/host-setup.sh
+        args="/tmp/host-setup.sh";;
     *)
         args=$@;;
 esac
 
 echo $args 1>&2
-options="-o StrictHostKeyChecking=no -i $CABOT_SSH_ID_FILE"
 ssh $options $CABOT_SSH_TARGET $args

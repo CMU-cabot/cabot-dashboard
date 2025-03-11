@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from typing import Optional, Tuple, Dict, Any, Union
 import json
 import random
+import sys
 
 
 @dataclass
@@ -56,7 +57,11 @@ class CommandType(Enum):
     SYSTEM_POWEROFF = "system-poweroff"
     CABOT_IS_ACTIVE = "cabot-is-active"
     SOFTWARE_UPDATE = "software_update"
+    SITE_UPDATE = "site_update"
+    ENV_UPDATE = "env_update"
     GET_IMAGE_TAGS = "get-image-tags"
+    GET_ENV = "get-env"
+    GET_DISK_USAGE = "get-disk-usage"
     DEBUG1 = "debug1"
     DEBUG2 = "debug2"
 
@@ -224,6 +229,21 @@ class CabotDashboardClient:
             status_code, _ = await self._make_request(session, "post", f"send/{self.cabot_id}", data)
             return False if status_code == 404 else True
 
+        async def update_env(options, command_name):
+            if not options:
+                await send_status({"status": "error", "message": f"No options specified for {command_name}"})
+                return
+
+            await send_status({"status": "start", "message": f"Starting {command_name} with {len(options)} options ..."})
+            with open("/tmp/update.env", "w") as f:
+                for k, v in options.items():
+                    f.write(f"{k}={v}\n")
+            success, error = await self.system_command.execute([command_type, "/tmp/update.env"])
+            if success:
+                await send_status({"status": "success", "message": f"{command_name} completed successfully"})
+            else:
+                await send_status({"status": "error", "message": f"{command_name} failed: {error}"})
+
         try:
             cmd_type = CommandType(command_type)
 
@@ -234,12 +254,15 @@ class CabotDashboardClient:
                     await send_status({"status": "error", "message": "No images specified for software update"})
                     return
 
-                await send_status({"status": "start", "message": f"Starting software update for {len(images)} images..."})
-                success, error = await self.system_command.execute([command_type, f"cabot-software-update@{json.dumps(images)}"])
-                if success:
-                    await send_status({"status": "success", "message": "Software update completed successfully"})
-                else:
-                    await send_status({"status": "error", "message": f"Software update failed: {error}"})
+                await update_env({"CABOT_LAUNCH_IMAGE_TAG": images[0]["version"]}, "Software update")
+
+            elif cmd_type == CommandType.SITE_UPDATE:
+                status_type = "site_update"
+                await update_env(command.get("commandOption", {}), "Site repository update")
+
+            elif cmd_type == CommandType.ENV_UPDATE:
+                status_type = "env_update"
+                await update_env(command.get("commandOption", {}), "Environment variable update")
 
             elif cmd_type == CommandType.GET_IMAGE_TAGS:
                 status_type = "image_tags"
@@ -260,6 +283,17 @@ class CabotDashboardClient:
                     await send_status({"status": "success", "tags": image_tags})
                 else:
                     error_msg = "No output from docker images command" if not output else f"Error getting image tags: {output}"
+                    await send_status({"status": "error", "message": error_msg})
+
+            elif cmd_type == CommandType.GET_ENV:
+                status_type = "env"
+                await send_status({"status": "start", "message": "Getting environment variables..."})
+                success, output = await self.system_command.execute([command_type])
+                if success and output:
+                    env = {p[0].strip(): p[1].strip() for p in (ln.split("=", maxsplit=1) for ln in output.split("\n")) if len(p) == 2 and "#" not in p[0]}
+                    await send_status({"status": "success", "env": env})
+                else:
+                    error_msg = "No environment variables" if not output else f"Error getting environment variables: {output}"
                     await send_status({"status": "error", "message": error_msg})
 
             else:
@@ -302,7 +336,8 @@ class CabotDashboardClient:
                         while True:
                             cabot_system_status = await self.get_cabot_system_status()
                             self.logger.debug(f"Add status to poll request: {cabot_system_status}")
-                            status_code, data = await self._make_request(session, "get", f"poll/{self.cabot_id}", {"cabot_system_status": cabot_system_status})
+                            _, cabot_disk_usage = await self.system_command.execute([CommandType.GET_DISK_USAGE.value])
+                            status_code, data = await self._make_request(session, "get", f"poll/{self.cabot_id}", {"cabot_system_status": cabot_system_status, "cabot_disk_usage": cabot_disk_usage})
 
                             if status_code == 200:
                                 await self.handle_command(session, data)
@@ -329,7 +364,7 @@ async def main():
         cabot_id = os.environ.get("CABOT_NAME")
         if not cabot_id:
             logging.error("Environment variable CABOT_NAME is not set")
-            return
+            sys.exit(1)
 
         client = CabotDashboardClient(cabot_id)
         await client.run()
@@ -342,3 +377,4 @@ if __name__ == "__main__":
         pass
     except Exception as e:
         logging.critical(f"Unexpected error in main process: {e}")
+        sys.exit(2)
