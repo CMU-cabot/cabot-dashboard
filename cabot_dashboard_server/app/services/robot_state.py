@@ -19,7 +19,7 @@ class RobotStateManager:
             cls._instance.POLLING_TIMEOUT = settings.polling_timeout
             cls._instance.MAX_MESSAGES = 100  # Maximum number of messages to retain per robot
             cls._instance.DISPLAY_MESSAGES = 5  # Number of messages to display
-            cls._instance.DISCONNECT_DETECTION_SECOND = 3 * 60
+            cls._instance.DISCONNECT_DETECTION_SECOND = 10 * 60
             cls._instance.scheduler = BackgroundScheduler()
             cls._instance.scheduler.add_job(cls._instance.disconnect_detection_handler, 'interval', seconds=5)
             cls._instance.scheduler.start()
