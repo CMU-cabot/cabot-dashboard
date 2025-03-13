@@ -23,6 +23,7 @@ class Settings(BaseSettings):
     max_robots: int = int(os.getenv("CABOT_DASHBOARD_MAX_ROBOTS", 5))
     max_messages: int = 100
     polling_timeout: float = float(os.getenv("CABOT_DASHBOARD_POLL_TIMEOUT", 240))
+    disconnect_detectioin_second: float = float(os.getenv("CABOT_DASHBOARD_DISCONNECT_DETECTION_SECOND", 10 * 60))
     debug_mode: bool = os.getenv("CABOT_DASHBOARD_DEBUG_MODE", "false").lower() == "true"
     allowed_cabot_ids: str = os.getenv('CABOT_DASHBOARD_ALLOWED_CABOT_IDS', '')
     access_token_expire_minutes: int = int(os.getenv("CABOT_DASHBOARD_ACCESS_TOKEN_EXPIRE_MINUTES", 30))
