@@ -48,6 +48,8 @@ services:
           - linux/amd64
         output:
           - type=registry
+    volumes:
+      - ${CABOT_SSH_ID_FILE}:/client/.ssh/ssh_key_cabot
     environment:
       - CABOT_DASHBOARD_SERVER_URL
       - CABOT_DASHBOARD_API_KEY
@@ -60,8 +62,10 @@ services:
       - CABOT_DASHBOARD_DEBUG_MODE
       - CABOT_DASHBOARD_DEBUG_STATUS
       # for ssh
-      - CABOT_SSH_TARGET
-      - CABOT_SSH_ID_FILE
+      - CABOT_SSH_TARGET=cabot@host-docker
+      - CABOT_SSH_ID_FILE=/client/.ssh/ssh_key_cabot
+    extra_hosts:
+      - "host-docker:host-gateway"
     logging:
       driver: "json-file"
       options:
