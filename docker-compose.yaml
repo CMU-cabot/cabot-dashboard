@@ -49,7 +49,7 @@ services:
         output:
           - type=registry
     volumes:
-      - ${CABOT_SSH_ID_FILE}:/client/.ssh/ssh_key_cabot
+      - ${CABOT_SSH_ID_FILE:-./please-specify-ssh-id-file}:/client/.ssh/ssh_key_cabot
     environment:
       - CABOT_DASHBOARD_SERVER_URL
       - CABOT_DASHBOARD_API_KEY
