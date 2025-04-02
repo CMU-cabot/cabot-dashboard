@@ -43,7 +43,7 @@ body {
     padding: 4px 8px;
     font-size: 14px;
     color: #495057;
-    width: calc(33.33% - 6px);
+    width: calc(100% - 6px);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
@@ -398,7 +398,7 @@ body {
 .image-versions {
     display: flex;
     flex-wrap: wrap;
-    gap: 8px;
+    gap: 3px;
     margin: 8px 0;
 }
 
@@ -453,12 +453,21 @@ body {
 }
 
 .version-tag {
-    background-color: #eef;
+    background-color: #eee;
 }
 
-.env-tag {
-    background-color: #fee;
+.env-key-tag {
     width: calc(50% - 6px);
+}
+
+.env-value-tag {
+    width: calc(50% - 6px);
+}
+
+.env-label-tag {
+    background-color: #fff;
+    text-align: center;
+    font-weight: bold;
 }
 
 .robot-list {

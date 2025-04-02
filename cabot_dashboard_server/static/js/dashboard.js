@@ -591,8 +591,9 @@ function updateDashboard(data) {
                             <div class="accordion-body">
                                 ${Object.keys(robot.env || {}).length > 0 ? `
                                 <div class="image-versions mb-2">
+                                    <div class="version-tag env-key-tag env-label-tag">Key</div><div class="version-tag env-value-tag env-label-tag">Value</div>
                                     ${Object.entries(robot.env || {}).map(([name, tag]) =>
-                                        `<div class="version-tag env-tag">${name}=${tag}</div>`
+                                        `<div class="version-tag env-key-tag">${name}</div><div class="version-tag env-value-tag" title="${tag}">${tag}</div>`
                                     ).join('')}
                                 </div>
                                 ` : robot.connected ? `
