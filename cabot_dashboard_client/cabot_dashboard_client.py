@@ -53,6 +53,7 @@ class CommandType(Enum):
 
     ROS_START = "ros-start"
     ROS_STOP = "ros-stop"
+    REPORT_SUBMIT = "report-submit"
     SYSTEM_REBOOT = "system-reboot"
     SYSTEM_POWEROFF = "system-poweroff"
     CABOT_IS_ACTIVE = "cabot-is-active"

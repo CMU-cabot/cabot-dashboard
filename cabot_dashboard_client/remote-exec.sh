@@ -13,6 +13,8 @@ case $1 in
         args="systemctl --user start cabot";;
     ros-stop)
         args="systemctl --user stop cabot";;
+    report-submit)
+        args="echo TODO: launch report-submitter";;
     system-reboot)
         args="sudo systemctl reboot";;
     system-poweroff)
