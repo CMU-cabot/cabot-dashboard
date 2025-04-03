@@ -14,7 +14,7 @@ case $1 in
     ros-stop)
         args="systemctl --user stop cabot";;
     report-submit)
-        args="echo TODO: launch report-submitter";;
+        args="~/cabot_ws/cabot/submit_report.sh";;
     system-reboot)
         args="sudo systemctl reboot";;
     system-poweroff)
