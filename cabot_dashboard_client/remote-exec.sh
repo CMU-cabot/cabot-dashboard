@@ -15,8 +15,10 @@ case $1 in
         args="systemctl --user stop cabot";;
     system-reboot)
         args="sudo systemctl reboot";;
+        # want to reboot the entire system, but not implemented yet
+        # args="ros2 service call /reboot std_srvs/srv/Trigger '{}'";;
     system-poweroff)
-        args="sudo systemctl poweroff";;
+        args="ros2 service call /shutdown std_srvs/srv/Trigger '{}'";;
     get-image-tags)
         args="docker images --format {{.CreatedAt}}={{.Repository}}:{{.Tag}} | sort | cut -f 2 -d =";;
     get-env)
