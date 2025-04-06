@@ -18,7 +18,8 @@ case $1 in
         # want to reboot the entire system, but not implemented yet
         # args="ros2 service call /reboot std_srvs/srv/Trigger '{}'";;
     system-poweroff)
-        args="source /opt/ros/galactic/setup.bash && ros2 service call /shutdown std_srvs/srv/Trigger '{}'";;
+	# need to source ros2, but don't want to specify ros version here
+        args="(source /opt/ros/galactic/setup.bash && ros2 service call /shutdown std_srvs/srv/Trigger '{}' &); echo 'success'";;
     get-image-tags)
         args="docker images --format {{.CreatedAt}}={{.Repository}}:{{.Tag}} | sort | cut -f 2 -d =";;
     get-env)
