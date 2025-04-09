@@ -10,6 +10,10 @@ services:
         platforms:
           - linux/arm64
           - linux/amd64
+        cache-from:
+          - type=local,src=${BUILDX_CACHE_DIR:-~/.cache/docker-buildx-mybuilder}/cabot-dashboard-server
+        cache-to:
+          - type=local,dest=${BUILDX_CACHE_DIR:-~/.cache/docker-buildx-mybuilder}/cabot-dashboard-server,mode=max
         output:
           - type=registry
     ports:
@@ -46,6 +50,10 @@ services:
         platforms:
           - linux/arm64
           - linux/amd64
+        cache-from:
+          - type=local,src=${BUILDX_CACHE_DIR:-~/.cache/docker-buildx-mybuilder}/cabot-dashboard-client
+        cache-to:
+          - type=local,dest=${BUILDX_CACHE_DIR:-~/.cache/docker-buildx-mybuilder}/cabot-dashboard-client,mode=max
         output:
           - type=registry
     volumes:
