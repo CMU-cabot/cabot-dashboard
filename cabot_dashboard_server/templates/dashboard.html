@@ -220,6 +220,10 @@
                                             <button type="button" class="btn btn-outline-secondary btn-sm refresh-btn" id="addEnvRow" onclick="addEnvRow()">
                                                 <i class="bi bi-plus"></i>
                                             </button>
+                                            <button type="button" class="btn btn-outline-secondary btn-sm refresh-btn" id="loadEnvFile" onclick="document.getElementById('load-env-file').click()">
+                                                Load Environment File
+                                            </button>
+                                            <input id="load-env-file" type="file" style="display:none" onchange="loadEnvFile(this)"/>
                                             <button type="button" class="btn btn-primary float-end" onclick="updateEnv()">
                                                 <i class="bi bi-cloud-arrow-down"></i> Update Environment Variables
                                             </button>
