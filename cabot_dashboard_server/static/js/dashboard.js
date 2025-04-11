@@ -1420,7 +1420,7 @@ function showEnvUpdateConfirmDialog(robots, envList) {
     let content = '<h6>Selected AI Suitcases:</h6>';
     content += Array.from(robots).map(robotId => `<li>${robotId}</li>`).join('');
     content += '<h6 class="mt-3">Environment Variables:</h6>';
-    content += "<div style='max-height: 400px; overflow: auto;'>";
+    content += "<div style='max-height: 300px; overflow: auto;'>";
     for (const [key, value] of Object.entries(envList)) {
         content += `<li>${key}=${value}</li>`;
     }
