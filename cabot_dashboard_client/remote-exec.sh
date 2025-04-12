@@ -43,4 +43,4 @@ case $1 in
 esac
 
 echo $args 1>&2
-ssh $options $CABOT_SSH_TARGET $args
+ssh $options $CABOT_SSH_TARGET nohup $args
