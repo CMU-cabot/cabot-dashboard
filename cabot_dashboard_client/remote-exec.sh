@@ -29,18 +29,18 @@ case $1 in
     software_update)
         ./remote-merge-env.sh $2
         scp $options -p ./host-setup.sh $CABOT_SSH_TARGET:/tmp/host-setup.sh
-        args="/tmp/host-setup.sh";;
+        args="nohup /tmp/host-setup.sh";;
     site_update)
         ./remote-merge-env.sh $2
         scp $options -p ./host-setup.sh $CABOT_SSH_TARGET:/tmp/host-setup.sh
-        args="/tmp/host-setup.sh";;
+        args="nohup /tmp/host-setup.sh";;
     env_update)
         ./remote-merge-env.sh $2
         scp $options -p ./host-setup.sh $CABOT_SSH_TARGET:/tmp/host-setup.sh
-        args="/tmp/host-setup.sh";;
+        args="nohup /tmp/host-setup.sh";;
     *)
         args=$@;;
 esac
 
 echo $args 1>&2
-ssh $options $CABOT_SSH_TARGET nohup $args
+ssh $options $CABOT_SSH_TARGET $args
