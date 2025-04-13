@@ -1420,9 +1420,11 @@ function showEnvUpdateConfirmDialog(robots, envList) {
     let content = '<h6>Selected AI Suitcases:</h6>';
     content += Array.from(robots).map(robotId => `<li>${robotId}</li>`).join('');
     content += '<h6 class="mt-3">Environment Variables:</h6>';
+    content += "<div style='max-height: 300px; overflow: auto;'>";
     for (const [key, value] of Object.entries(envList)) {
         content += `<li>${key}=${value}</li>`;
     }
+    content += "</div>";
     selectedRobotsList.innerHTML = content;
 
     // Set current action and versions
@@ -1441,4 +1443,31 @@ function showEnvUpdateConfirmDialog(robots, envList) {
         errorDiv.style.display = 'none';
         errorDiv.textContent = '';
     }
+}
+
+function loadEnvFile(fileInput) {
+    const file = fileInput.files[0];
+    const reader = new FileReader();
+    reader.onload = function (e) {
+        document.querySelector('#envTable tbody').innerHTML = ''; // Clear existing rows
+        const content = e.target.result;
+        const lines = content.split('\n');
+        for (const line of lines) {
+            const components = line.split('=');
+            if (components.length < 2 || components[0].startsWith('#')) continue; // Skip invalid lines
+            const key = components.shift().trim(); // Get the first part as key
+            const value = components.join('=').trim(); // Join the rest as value
+            if (key && value) {
+                addEnvRow();
+                document.querySelector('#envTable tbody tr:last-child input[name="key[]"]').value = key;
+                document.querySelector('#envTable tbody tr:last-child input[name="value[]"]').value = value;
+            }
+        }
+    };
+    reader.readAsText(file);
+    reader.onerror = function (e) {
+        console.error('Error reading file:', e.target.error);
+        alert('Error reading file');
+    };
+    fileInput.value = ''; // Clear the file input
 }

@@ -16,6 +16,7 @@ echo site-version:$CABOT_SITE_VERSION
 systemctl --user stop cabot
 
 echo Setup dependency
+git fetch -p
 git checkout $CABOT_LAUNCH_IMAGE_TAG
 (./setup-dependency.sh)
 echo Done
