@@ -15,8 +15,11 @@ case $1 in
         args="systemctl --user stop cabot";;
     system-reboot)
         args="sudo systemctl reboot";;
+        # want to reboot the entire system, but not implemented yet
+        # args="ros2 service call /reboot std_srvs/srv/Trigger '{}'";;
     system-poweroff)
-        args="sudo systemctl poweroff";;
+	# need to source ros2, but don't want to specify ros version here
+        args="(source /opt/ros/galactic/setup.bash && ros2 service call /shutdown std_srvs/srv/Trigger '{}' &); echo 'success'";;
     get-image-tags)
         args="docker images --format {{.CreatedAt}}={{.Repository}}:{{.Tag}} | sort | cut -f 2 -d =";;
     get-env)
@@ -26,15 +29,15 @@ case $1 in
     software_update)
         ./remote-merge-env.sh $2
         scp $options -p ./host-setup.sh $CABOT_SSH_TARGET:/tmp/host-setup.sh
-        args="/tmp/host-setup.sh";;
+        args="nohup /tmp/host-setup.sh";;
     site_update)
         ./remote-merge-env.sh $2
         scp $options -p ./host-setup.sh $CABOT_SSH_TARGET:/tmp/host-setup.sh
-        args="/tmp/host-setup.sh";;
+        args="nohup /tmp/host-setup.sh";;
     env_update)
         ./remote-merge-env.sh $2
         scp $options -p ./host-setup.sh $CABOT_SSH_TARGET:/tmp/host-setup.sh
-        args="/tmp/host-setup.sh";;
+        args="nohup /tmp/host-setup.sh";;
     *)
         args=$@;;
 esac
