@@ -14,6 +14,8 @@ router = APIRouter(
     dependencies=[Depends(get_api_key)]
 )
 
+reconnected_clients = {}
+
 @router.post("/connect/{client_id}")
 async def connect(
     client_id: str,
@@ -28,6 +30,7 @@ async def connect(
         
         await command_queue_manager.initialize_client(client_id)
         logger.info(f"Client {client_id} connected")
+        reconnected_clients[client_id] = True
         return {"status": "Connected"}
     except Exception as e:
         logger.error(f"Error connecting client {client_id}: {e}")
@@ -77,6 +80,8 @@ async def poll(
             "disk_usage": disk_usage
         }
         robot_manager.update_robot_state(client_id, state)
+        if reconnected_clients.pop(client_id, None):
+            return {"command": "get-env", "commandOption": {}}
 
         result = await command_queue_manager.wait_for_update(client_id)
         return result
