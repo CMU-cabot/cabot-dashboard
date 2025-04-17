@@ -33,5 +33,6 @@ echo Done
 
 echo Set up and Install
 (./build-workspace.sh -o)  # build host ros workspace
-(./plugin-build.sh -s)
+#(./plugin-build.sh -s)
+setsid ./plugin-build.sh -s > /tmp/host-setup-output.log 2>&1 &
 echo All Done
