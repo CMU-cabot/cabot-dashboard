@@ -148,7 +148,6 @@ async def websocket_endpoint(
                     if command_data not in ["get-image-tags", "get-env", "ros_stop"] and system_status not in ["inactive", "failed", "unknown"]:
                         logger.info(f"Command {command_data} not allowed in status {system_status}")
                         continue
-                    print(f"{cabot_id}: status={system_status}, command={command_data}")
                     try:
                         await command_queue_manager.initialize_client(cabot_id)
                         command_mapping = {
