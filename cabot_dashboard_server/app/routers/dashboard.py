@@ -144,7 +144,7 @@ async def websocket_endpoint(
                     if cabot_id not in robot_manager.connected_cabots:
                         logger.error(f"Robot {cabot_id} is not connected")
                         continue
-                    system_status = robot_manager.connected_cabots[cabot_id].get("system_status")
+                    system_status = robot_manager.connected_cabots[cabot_id].get("system_status", "unknown")
                     if command_data not in ["get-image-tags", "get-env", "ros_stop"] and system_status not in ["inactive", "failed", "unknown"]:
                         logger.info(f"Command {command_data} not allowed in status {system_status}")
                         continue
