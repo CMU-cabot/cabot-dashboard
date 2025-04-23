@@ -431,7 +431,13 @@ async function executeAction() {
                     commandOption = {};
                     for (const row of document.querySelectorAll('#envTable tbody tr')) {
                         const input = row.querySelectorAll('input[type=text]');
-                        commandOption[input[0].value.trim()] = input[1].value.trim();
+                        let value = input[1].value.trim();
+                        const v_c = value.split('#');
+                        let v = v_c.shift().trim();
+                        if (v.match(/ /) && !v.match(/^['"].*['"]$/)) {
+                            value = v_c.length == 0 ? `"${v}"` : `"${v}" #${v_c.join('#')}`;
+                        }
+                        commandOption[input[0].value.trim()] = value;
                     }
                 }
 

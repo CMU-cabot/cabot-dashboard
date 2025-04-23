@@ -11,6 +11,8 @@ import json
 import random
 import sys
 
+MAX_LOG = 500  # None
+
 
 @dataclass
 class Config:
@@ -106,7 +108,7 @@ class SystemCommand:
             stdout_str = stdout.decode().strip()
             stderr_str = stderr.decode().strip()
             self.logger.info(f"Command stderr: {stderr_str}")
-            self.logger.info(f"Command stdout: {stdout_str}")
+            self.logger.info(f"Command stdout: {stdout_str[:MAX_LOG]}")
             self.logger.info(f"Command returncode: {process.returncode}")
 
             if process.returncode == 0:
@@ -178,7 +180,7 @@ class CabotDashboardClient:
             self.logger.error(f"Token request failed: {str(e)}")
             raise
 
-    async def _make_request(self, session: aiohttp.ClientSession, method: str, endpoint: str, data: Optional[Dict] = None) -> Tuple[Optional[int], Optional[Dict]]:
+    async def _make_request(self, session: aiohttp.ClientSession, method: str, endpoint: str, data: Optional[Dict] = None, timeout=None) -> Tuple[Optional[int], Optional[Dict]]:
         if not self.config.token:
             await self._get_token()
 
@@ -193,10 +195,10 @@ class CabotDashboardClient:
         }
 
         url = f"{self.config.server_url}/api/client/{endpoint}"
-        self.logger.debug(f"Making request to {url} with API key: {self.config.api_key[:4]}...")
+        self.logger.debug(f"Making request to {url} with API key: {self.config.api_key[:4]}... | timeout {timeout}")
 
         try:
-            async with getattr(session, method)(url, headers=headers, json=data) as response:
+            async with getattr(session, method)(url, headers=headers, json=data, timeout=timeout) as response:
                 response_data = await response.json() if response.status == 200 else None
                 if response.status == 401:
                     self.logger.warning("Token expired, refreshing...")
@@ -211,7 +213,7 @@ class CabotDashboardClient:
 
     async def connect(self, session: aiohttp.ClientSession) -> bool:
         for attempt in range(self.config.max_retries):
-            status_code, _ = await self._make_request(session, "post", f"connect/{self.cabot_id}")
+            status_code, _ = await self._make_request(session, "post", f"connect/{self.cabot_id}", timeout=10)
             if status_code == 200:
                 return True
             elif status_code == 403:
@@ -226,8 +228,8 @@ class CabotDashboardClient:
 
         async def send_status(data: Dict) -> bool:
             data["type"] = status_type
-            self.logger.info(f"Sending status: {json.dumps(data, indent=2)}")
-            status_code, _ = await self._make_request(session, "post", f"send/{self.cabot_id}", data)
+            self.logger.info(f"Sending status: {json.dumps(data, indent=2)[:MAX_LOG]}")
+            status_code, _ = await self._make_request(session, "post", f"send/{self.cabot_id}", data, timeout=10)
             return False if status_code == 404 else True
 
         async def update_env(options, command_name):
@@ -338,7 +340,7 @@ class CabotDashboardClient:
                             cabot_system_status = await self.get_cabot_system_status()
                             self.logger.debug(f"Add status to poll request: {cabot_system_status}")
                             _, cabot_disk_usage = await self.system_command.execute([CommandType.GET_DISK_USAGE.value])
-                            status_code, data = await self._make_request(session, "get", f"poll/{self.cabot_id}", {"cabot_system_status": cabot_system_status, "cabot_disk_usage": cabot_disk_usage})
+                            status_code, data = await self._make_request(session, "get", f"poll/{self.cabot_id}", {"cabot_system_status": cabot_system_status, "cabot_disk_usage": cabot_disk_usage}, timeout=5 * 60)
 
                             if status_code == 200:
                                 await self.handle_command(session, data)

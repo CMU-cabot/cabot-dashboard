@@ -12,6 +12,7 @@ echo image-tag:$CABOT_LAUNCH_IMAGE_TAG
 echo pkg-dir:$CABOT_SITE_PKG_DIR 
 echo site-repo:$CABOT_SITE_REPO 
 echo site-version:$CABOT_SITE_VERSION
+echo cabot-site:$CABOT_SITE
 
 systemctl --user stop cabot
 
@@ -21,16 +22,17 @@ git checkout $CABOT_LAUNCH_IMAGE_TAG
 (./setup-dependency.sh)
 echo Done
 
-echo イメージとマップの取得
-rm -rf $CABOT_SITE_PKG_DIR
+echo Getting docker images and map data
 mkdir -p $CABOT_SITE_PKG_DIR
+rm -rf $CABOT_SITE_PKG_DIR/$CABOT_SITE  # delete pkg only, do not delete downloaded zip
 (./manage-pkg.sh -r $CABOT_SITE_REPO -v $CABOT_SITE_VERSION -d -u)
-# CABOT_SITE_PKG_DIRに依存。ないとpwdにダウンロード
+# depends on CABOT_SITE_PKG_DIR, download to the current working dir if not exisit
 echo Done
 
 (./manage-pkg.sh -p $CABOT_LAUNCH_IMAGE_TAG)
 
-echo セットアップとインストール
-(./plugin-build.sh)
-systemctl --user restart cabot-plugin
+echo Set up and Install
+(./build-workspace.sh -o)  # build host ros workspace
+#(./plugin-build.sh -s)
+setsid ./plugin-build.sh -s > /tmp/host-setup-output.log 2>&1 &
 echo All Done
