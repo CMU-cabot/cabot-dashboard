@@ -528,7 +528,7 @@ function updateDashboard(data) {
             const robotCard = document.createElement('div');
             robotCard.className = 'robot-card mb-3';
             robotCard.innerHTML = `
-                <div class="d-flex justify-content-between align-items-start mb-2">
+                <div class="d-flex justify-content-between align-items-start mb-1">
                     <div class="form-check">
                         <input class="form-check-input robot-checkbox" type="checkbox" value="${robot.id}"
                                ${selectedRobots.has(robot.id) ? 'checked' : ''}
@@ -537,7 +537,7 @@ function updateDashboard(data) {
                     </div>
                     <div class="text-end">
                         <div>
-                            <span class="badge ${robot.connected ? 'bg-success' : 'bg-danger'} me-1">
+                            <span class="badge ${robot.connected ? 'bg-success' : 'bg-danger'}">
                                 ${robot.connected ? 'Connected' : 'Disconnected'}
                             </span>
                             <span class="badge ${robot.system_status === 'active' ? 'bg-primary' : 
@@ -550,19 +550,21 @@ function updateDashboard(data) {
                             <span class="badge ${robot.disk_usage.value > 90 ? 'bg-danger' :
                                 robot.disk_usage.value > 70 ? 'bg-warning' :
                                 robot.disk_usage.value >= 0 ? 'bg-success' :
-                                'bg-secondary'} ms-1">
+                                'bg-secondary'}">
                                 ${robot.disk_usage.text}
                             </span>
+                            <span class="badge bg-dark">
+                                ${formatDateTime(robot.last_poll, true)}
+                            </span>
                         </div>
-                        <div class="text-muted small mt-1">Last Poll: ${formatDateTime(robot.last_poll)}</div>
                     </div>
                 </div>
-                <div class="mb-2">
+                <div class="cabot-info mb-1">
                     ${robot.env['CABOT_LAUNCH_IMAGE_TAG'] ? `
-                    <span class="badge bg-primary me-1">${robot.env['CABOT_LAUNCH_IMAGE_TAG']}</span>
+                    <span class="badge bg-primary">${robot.env['CABOT_LAUNCH_IMAGE_TAG']}</span>
                     ` : ''}
                     ${robot.env['CABOT_SITE'] && robot.env['CABOT_SITE_VERSION'] ? `
-                    <span class="badge bg-primary me-1">${robot.env['CABOT_SITE']}@${robot.env['CABOT_SITE_VERSION']}</span>
+                    <span class="badge bg-primary">${robot.env['CABOT_SITE']}@${robot.env['CABOT_SITE_VERSION']}</span>
                     ` : ''}
                 </div>
                 <div class="accordion" id="parentAccordion-${robot.id}">
@@ -1231,11 +1233,11 @@ function initializeDockerVersions() {
 }
 
 // Format date time
-function formatDateTime(dateString) {
+function formatDateTime(dateString, timeonly = false) {
     if (!dateString) return 'Never';
     try {
         const date = new Date(dateString);
-        return date.toLocaleString();
+        return timeonly ? date.toLocaleTimeString() : date.toLocaleString();
     } catch (error) {
         console.error('Error formatting date:', error);
         return dateString;

@@ -473,3 +473,26 @@ body {
 .robot-list {
     max-height: 75vh;
 }
+
+#cabots {
+    padding: 8px;
+}
+
+#cabots .robot-card {
+    padding: 4px;
+}
+
+#cabots .cabot-info {
+    margin-top: -0.25rem;
+    line-height: 0px;
+}
+
+#cabots .badge {
+    padding: 2px 4px;
+    font-size: x-small;
+}
+
+#cabots .accordion-button {
+    padding: 0px 4px;
+    font-size: small;
+}
