@@ -454,6 +454,7 @@ async function executeAction() {
         });
 
         await Promise.all(promises);
+        toggleAllRobots(false)
         closeDialog();
     } catch (error) {
         console.error('Error executing action:', error);
@@ -520,7 +521,7 @@ function updateDashboard(data) {
         if (currentFilter === 'all' ||
             (currentFilter === 'connected' && robot.connected) ||
             (currentFilter === 'disconnected' && !robot.connected)) {
-            if (currentSearch != '' && !robot.id.toLowerCase().includes(currentSearch)) {
+            if (currentSearch != '' && !(robot.name || robot.id).toLowerCase().includes(currentSearch)) {
                 return;
             }
             
