@@ -53,6 +53,7 @@ class Settings(BaseSettings):
     cabot_name_map: dict = get_cabot_name_map('CABOT_DASHBOARD_ALLOWED_CABOT_IDS')
     access_token_expire_minutes: int = int(os.getenv("CABOT_DASHBOARD_ACCESS_TOKEN_EXPIRE_MINUTES", 30))
     jwt_secret_key: str = os.getenv("CABOT_DASHBOARD_JWT_SECRET_KEY", "your-jwt-secret-key-here")
+    default_site_repo = os.getenv("CABOT_DASHBOARD_DEFAULT_SITE_REPO", "")
     algorithm: str = "HS256"
     client_config: ClientConfig = ClientConfig()
 

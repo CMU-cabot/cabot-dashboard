@@ -155,6 +155,7 @@ function initWebSocket() {
             setTimeout(() => {
                 refreshTags('Dockerhub1');
             }, 1000);
+            onSiteUpdate();
         };
         
         ws.onclose = (event) => {
@@ -1248,6 +1249,9 @@ async function onSiteUpdate() {
     const repository = document.getElementById('CABOT_SITE_REPO').value.trim();
 
     console.log('Selected site repository:', repository);
+    if (!repository) {
+        return;
+    }
     try {
         ws.send(JSON.stringify({
             type: 'refresh_site',
