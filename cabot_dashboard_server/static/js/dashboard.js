@@ -569,22 +569,13 @@ function updateDashboard(data) {
                     ` : ''}
                 </div>
                 <div class="accordion" id="parentAccordion-${robot.id}">
-                    <div class="accordion-item details">
-                        <h2 class="accordion-header">
-                            <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-details-${robot.id}">
-                                Details...
-                            </button>
-                        </h2>
-                        <div id="collapse-details-${robot.id}" class="accordion-collapse collapse}" data-bs-parent="#parentAccordion-${robot.id}">
-                        </div>
-                    </div>
                     <div class="accordion-item">
                         <h2 class="accordion-header">
                             <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapse-tag-${robot.id}">
                                 Image Tags
                             </button>
                         </h2>
-                        <div id="collapse-tag-${robot.id}" class="accordion-collapse collapse ${visible_ids.includes(`collapse-tag-${robot.id}`) ? 'show' : ''}">
+                        <div id="collapse-tag-${robot.id}" class="accordion-collapse collapse ${visible_ids.includes(`collapse-tag-${robot.id}`) ? 'show' : ''}" data-bs-parent="#parentAccordion-${robot.id}">
                             <div class="accordion-body">
                                 ${Object.keys(robot.images || {}).length > 0 ? `
                                 <div class="image-versions mb-2">
@@ -606,7 +597,7 @@ function updateDashboard(data) {
                                 Environment Variables
                             </button>
                         </h2>
-                        <div id="collapse-env-${robot.id}" class="accordion-collapse collapse ${visible_ids.includes(`collapse-env-${robot.id}`) ? 'show' : ''}">
+                        <div id="collapse-env-${robot.id}" class="accordion-collapse collapse ${visible_ids.includes(`collapse-env-${robot.id}`) ? 'show' : ''}" data-bs-parent="#parentAccordion-${robot.id}">
                             <div class="accordion-body">
                                 ${Object.keys(robot.env || {}).length > 0 ? `
                                 <div class="image-versions mb-2">
@@ -629,7 +620,7 @@ function updateDashboard(data) {
                                 Messages
                             </button>
                         </h2>
-                        <div id="collapse-msg-${robot.id}" class="accordion-collapse collapse ${visible_ids.includes(`collapse-msg-${robot.id}`) ? 'show' : ''}">
+                        <div id="collapse-msg-${robot.id}" class="accordion-collapse collapse ${visible_ids.includes(`collapse-msg-${robot.id}`) ? 'show' : ''}" data-bs-parent="#parentAccordion-${robot.id}">
                             <div class="accordion-body">
                                 <div class="robot-info">
                                     ${robot.messages && robot.messages.length > 0 ? `
