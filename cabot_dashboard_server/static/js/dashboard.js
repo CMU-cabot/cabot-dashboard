@@ -664,6 +664,11 @@ function updateDashboard(data) {
                 updateSelectAllCheckbox();
                 updateSelectedCount();
             });
+            const toggleLabel = robotCard.querySelector('.form-check-label');
+            toggleLabel.addEventListener('click', (e) => {
+                robotCard.classList.toggle('show-accordion')
+                e.preventDefault();
+            });
 
             robotList.appendChild(robotCard);
         }

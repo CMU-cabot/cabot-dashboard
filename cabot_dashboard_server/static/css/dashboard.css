@@ -488,11 +488,14 @@ body {
 }
 
 #cabots .badge {
-    padding: 2px 4px;
-    font-size: x-small;
+    padding: 2px 5px;
+    font-size: 8.5pt;
 }
 
-#cabots .accordion-button {
-    padding: 0px 4px;
-    font-size: small;
+.robot-card:not(.show-accordion) .accordion-item {
+    display: none;
+}
+
+.form-check-label {
+    user-select: none;
 }
