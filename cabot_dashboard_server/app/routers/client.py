@@ -80,7 +80,8 @@ async def poll(
             "disk_usage": disk_usage
         }
         robot_manager.update_robot_state(client_id, state)
-        if reconnected_clients.pop(client_id, None):
+        if reconnected_clients.get(client_id, True):
+            reconnected_clients[client_id] = False
             return {"command": "get-env", "commandOption": {}}
 
         result = await command_queue_manager.wait_for_update(client_id)

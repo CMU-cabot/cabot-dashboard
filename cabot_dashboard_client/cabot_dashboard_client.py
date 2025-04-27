@@ -344,7 +344,7 @@ class CabotDashboardClient:
 
                             if status_code == 200:
                                 await self.handle_command(session, data)
-                            elif status_code == 404:
+                            elif status_code == 404 or status_code is None:
                                 break
 
                             await asyncio.sleep(self.config.polling_interval)

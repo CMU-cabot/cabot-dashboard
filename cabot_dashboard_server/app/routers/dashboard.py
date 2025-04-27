@@ -50,6 +50,7 @@ async def dashboard_page(
                 "request": request,
                 "base_url": request.base_url,
                 "debug_mode": settings.debug_mode,
+                "default_site_repo": settings.default_site_repo,
                 "user": user.username,
                 "docker_versions": docker_versions,
                 "robots": robots,

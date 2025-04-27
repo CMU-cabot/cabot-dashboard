@@ -473,3 +473,37 @@ body {
 .robot-list {
     max-height: 75vh;
 }
+
+#cabots {
+    padding: 8px;
+}
+
+#cabots .robot-card {
+    padding: 4px;
+}
+
+#cabots .cabot-info {
+    margin-top: -0.25rem;
+    line-height: 0px;
+}
+
+#cabots .badge {
+    padding: 2px 5px;
+    font-size: 8.5pt;
+}
+
+.robot-card:not(.show-accordion) .accordion-item {
+    display: none;
+}
+
+.form-check-label {
+    user-select: none;
+}
+
+.robot-card.show-accordion .form-check-label .bi-chevron-down {
+    display: none;
+}
+
+.robot-card:not(.show-accordion) .form-check-label .bi-chevron-up {
+    display: none;
+}
