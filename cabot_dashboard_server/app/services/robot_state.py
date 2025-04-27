@@ -236,7 +236,7 @@ class RobotStateManager:
                 'system_status': robot.get('system_status', 'unknown'),  # Add system_status
                 'disk_usage': {"text": disk_usage_text, "value": disk_usage_value}
             })
-        cabot_list.sort(key=lambda x: x['id'])
+        cabot_list.sort(key=lambda x: x['name'])
         return cabot_list
 
     async def send_command(self, robot_id: str, command: Dict) -> None:
