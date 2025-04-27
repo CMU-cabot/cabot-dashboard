@@ -499,3 +499,11 @@ body {
 .form-check-label {
     user-select: none;
 }
+
+.robot-card.show-accordion .form-check-label .bi-chevron-down {
+    display: none;
+}
+
+.robot-card:not(.show-accordion) .form-check-label .bi-chevron-up {
+    display: none;
+}

@@ -534,7 +534,7 @@ function updateDashboard(data) {
                         <input class="form-check-input robot-checkbox" type="checkbox" value="${robot.id}"
                                ${selectedRobots.has(robot.id) ? 'checked' : ''}
                                ${!robot.connected ? 'disabled' : ''}>
-                        <label class="form-check-label fw-bold">${robot.name || robot.id}</label>
+                        <label class="form-check-label fw-bold">${robot.name || robot.id}&nbsp;<i class="bi bi-chevron-down"></i><i class="bi bi-chevron-up"></i></label>
                     </div>
                     <div class="text-end">
                         <div>
