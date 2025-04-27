@@ -340,6 +340,7 @@ class CabotDashboardClient:
                             self.logger.debug(f"Add status to poll request: {cabot_system_status}")
                             _, cabot_disk_usage = await self.system_command.execute([CommandType.GET_DISK_USAGE.value])
                             status_code, data = await self._make_request(session, "get", f"poll/{self.cabot_id}", {"cabot_system_status": cabot_system_status, "cabot_disk_usage": cabot_disk_usage}, timeout=5 * 60)
+
                             if status_code == 200:
                                 await self.handle_command(session, data)
                             elif status_code == 404 or status_code is None:

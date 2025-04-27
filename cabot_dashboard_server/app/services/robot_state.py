@@ -226,7 +226,7 @@ class RobotStateManager:
             disk_usage_value = int(m.group(1)) if m else -1
             cabot_list.append({
                 'id': robot_id,
-                'name': robot.get('name', robot_id),
+                'name': settings.cabot_name_map.get(robot_id, robot_id),
                 'connected': robot.get('connected', False),
                 'last_poll': robot.get('last_poll', None),
                 'messages': panel_messages,  # Latest 5 messages within 5 minutes for panel display
@@ -236,7 +236,7 @@ class RobotStateManager:
                 'system_status': robot.get('system_status', 'unknown'),  # Add system_status
                 'disk_usage': {"text": disk_usage_text, "value": disk_usage_value}
             })
-        cabot_list.sort(key=lambda x: x['id'])
+        cabot_list.sort(key=lambda x: x['name'])
         return cabot_list
 
     async def send_command(self, robot_id: str, command: Dict) -> None:

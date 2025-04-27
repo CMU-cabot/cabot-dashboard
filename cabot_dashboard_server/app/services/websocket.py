@@ -4,6 +4,18 @@ from app.services.docker_hub import DockerHubService
 from app.utils.logger import logger
 from app.services.github import fetchSiteReleases
 
+
+def fix_version_order(versions):
+    result = []
+    for ver in versions:
+        if ver not in result:
+            p = ver.split("-")
+            if len(p) > 1 and p[0] not in result and p[0] in versions:
+                result.append(p[0])
+            result.append(ver)
+    return result
+
+
 class ConnectionManager:
     def __init__(self):
         self.active_connections: List[WebSocket] = []
@@ -51,7 +63,7 @@ class ConnectionManager:
                 "type": "refresh_tags_response",
                 "image_id": image_id,
                 "status": "success",
-                "tags": tags
+                "tags": fix_version_order(tags)
             }
         except Exception as e:
             logger.error(f"Failed to fetch tags for {image_id}: {str(e)}")
