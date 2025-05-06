@@ -18,6 +18,7 @@ def setup_logger():
     # ハンドラーの設定
     handler = logging.StreamHandler()
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message).200s ...') # 200文字まで表示
     handler.setFormatter(formatter)
     handler.setLevel(log_level)  # ハンドラーにもログレベルを設定
     logger.addHandler(handler)
