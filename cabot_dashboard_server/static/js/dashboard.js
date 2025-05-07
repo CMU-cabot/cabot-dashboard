@@ -204,7 +204,10 @@ function initWebSocket() {
                     case 'refresh_site_response':
                         handleSiteResponse(data);
                         break;
-                }
+                    default:
+                        console.log(data);
+                        break;
+                    }
             } catch (error) {
                 console.error('Error processing WebSocket message:', error);
             }
