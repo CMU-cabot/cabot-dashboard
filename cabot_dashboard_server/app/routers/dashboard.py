@@ -1,3 +1,4 @@
+import asyncio
 from fastapi import APIRouter, Depends, Request, Cookie, HTTPException, WebSocket, WebSocketDisconnect, Body
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
@@ -128,8 +129,7 @@ async def websocket_endpoint(
             "messages": robot_manager.get_messages(limit=100)
         })
 
-        while True:
-            data = await websocket.receive_json()
+        async def handle_requests(data):
             if data.get("type") == "refresh":
                 # Send updated robot state
                 await websocket_manager.broadcast({
@@ -144,11 +144,11 @@ async def websocket_endpoint(
                 if cabot_id and command_data:
                     if cabot_id not in robot_manager.connected_cabots:
                         logger.error(f"Robot {cabot_id} is not connected")
-                        continue
+                        return
                     system_status = robot_manager.connected_cabots[cabot_id].get("system_status", "unknown")
                     if command_data not in ["get-image-tags", "get-env", "ros_stop"] and system_status not in ["inactive", "failed", "unknown"]:
                         logger.info(f"Command {command_data} not allowed in status {system_status}")
-                        continue
+                        return
                     try:
                         await command_queue_manager.initialize_client(cabot_id)
                         command_mapping = {
@@ -165,6 +165,12 @@ async def websocket_endpoint(
                         }
                         logger.info(f"Command added to queue for {cabot_id}: {formatted_command}")
                         await command_queue_manager.add_command(cabot_id, formatted_command)
+                        await websocket.send_json({
+                            "type": "add_command_response",
+                            "status": "success",
+                            "cabotId": cabot_id,
+                            "command": formatted_command,
+                        })
                     except Exception as e:
                         logger.error(f"Error adding command to queue for {cabot_id}: {e}")
             elif data.get("type") == "refresh_tags":
@@ -176,6 +182,9 @@ async def websocket_endpoint(
             elif data.get("type") == "refresh_site":
                 response = await websocket_manager.handle_refresh_site(data)
                 await websocket.send_json(response)
+
+        while True:
+            asyncio.create_task(handle_requests(await websocket.receive_json()))
     except WebSocketDisconnect:
         logger.info("WebSocket disconnected")
     except Exception as e:

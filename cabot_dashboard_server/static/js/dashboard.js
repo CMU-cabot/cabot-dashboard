@@ -48,6 +48,16 @@ function initializeUI() {
         });
     }
 
+    // Add pause handler
+    const pauseCheckbox = document.getElementById('pause');
+    if (pauseCheckbox) {
+        pauseCheckbox.addEventListener('change', (e) => {
+            if (!e.target.checked) {
+                updateDashboard();
+            }
+        });
+    }
+
     // Add event listener for view history buttons
     document.addEventListener('click', (e) => {
         if (e.target.closest('.view-history-btn')) {
@@ -186,7 +196,11 @@ function initWebSocket() {
                 switch (data.type) {
                     case 'robot_state':
                         if (data.cabots) {
-                            updateDashboard(data);
+                            if (document.getElementById("pause").checked) {
+                                lastData = data;
+                            } else {
+                                updateDashboard(data);
+                            }
                         }
                         if (data.messages) {
                             updateMessageList(data.messages);
@@ -204,7 +218,10 @@ function initWebSocket() {
                     case 'refresh_site_response':
                         handleSiteResponse(data);
                         break;
-                }
+                    default:
+                        console.log(data);
+                        break;
+                    }
             } catch (error) {
                 console.error('Error processing WebSocket message:', error);
             }
@@ -455,6 +472,10 @@ async function executeAction() {
         });
 
         await Promise.all(promises);
+        if (document.getElementById("pause").checked) {
+            document.getElementById("pause").checked = false;
+            updateDashboard();
+        }
         toggleAllRobots(false)
         closeDialog();
     } catch (error) {
