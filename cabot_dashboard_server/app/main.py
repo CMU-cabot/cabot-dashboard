@@ -39,6 +39,7 @@ async def add_security_headers(request: Request, call_next):
     response.headers["X-Content-Type-Options"] = "nosniff"
     response.headers["X-Frame-Options"] = "DENY"
     response.headers["Content-Security-Policy"] = "upgrade-insecure-requests"
+    response.headers["Cache-Control"] = "no-cache, no-store"
     return response
 
 templates = Jinja2Templates(directory=root_dir / "templates")
