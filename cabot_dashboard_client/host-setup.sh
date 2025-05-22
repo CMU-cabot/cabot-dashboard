@@ -24,7 +24,6 @@ echo Done
 
 echo Getting docker images and map data
 mkdir -p $CABOT_SITE_PKG_DIR
-rm -rf $CABOT_SITE_PKG_DIR/$CABOT_SITE  # delete pkg only, do not delete downloaded zip
 (./manage-pkg.sh -r $CABOT_SITE_REPO -v $CABOT_SITE_VERSION -d -u)
 # depends on CABOT_SITE_PKG_DIR, download to the current working dir if not exisit
 echo Done
