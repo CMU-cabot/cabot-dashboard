@@ -64,6 +64,7 @@ class CommandType(Enum):
     GET_IMAGE_TAGS = "get-image-tags"
     GET_ENV = "get-env"
     GET_DISK_USAGE = "get-disk-usage"
+    GET_WIFI_STATUS = "get-wifi-status"
     DEBUG1 = "debug1"
     DEBUG2 = "debug2"
 
@@ -339,7 +340,8 @@ class CabotDashboardClient:
                             cabot_system_status = await self.get_cabot_system_status()
                             self.logger.debug(f"Add status to poll request: {cabot_system_status}")
                             _, cabot_disk_usage = await self.system_command.execute([CommandType.GET_DISK_USAGE.value])
-                            status_code, data = await self._make_request(session, "get", f"poll/{self.cabot_id}", {"cabot_system_status": cabot_system_status, "cabot_disk_usage": cabot_disk_usage}, timeout=5 * 60)
+                            _, cabot_wifi_status = await self.system_command.execute([CommandType.GET_WIFI_STATUS.value])
+                            status_code, data = await self._make_request(session, "get", f"poll/{self.cabot_id}", {"cabot_system_status": cabot_system_status, "cabot_disk_usage": cabot_disk_usage, "cabot_wifi_status": cabot_wifi_status}, timeout=5 * 60)
 
                             if status_code == 200:
                                 await self.handle_command(session, data)
