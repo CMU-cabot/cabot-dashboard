@@ -575,6 +575,10 @@ function updateDashboard(data) {
                                 'bg-secondary'}">
                                 ${robot.disk_usage.text}
                             </span>
+                            <span class="badge ${robot.wifi_status == 'on' ? 'success' :
+                                robot.wifi_status == 'off' ? 'bg-danger' : 'bg-warning'}">
+                                wifi ${robot.wifi_status || ''}
+                            </span>
                             <span class="badge bg-dark">
                                 ${formatDateTime(robot.last_poll, true)}
                             </span>

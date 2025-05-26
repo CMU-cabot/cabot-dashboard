@@ -28,6 +28,7 @@ class RobotStateManager:
                 "id": cabot_id,
                 "status": "unknown",
                 "system_status": "unknown",
+                "wifi_status": "unknown",
                 "disk_usage": "unknown",
                 "last_poll": None,
                 "connected": False,
@@ -64,6 +65,7 @@ class RobotStateManager:
             "id": client_id,
             "status": state.get("status", "unknown"),
             "system_status": state.get("system_status", "unknown"),
+            "wifi_status": state.get("wifi_status", "unknown"),
             "disk_usage": state.get("disk_usage", "unknown"),
             "last_poll": datetime.now(timezone.utc).isoformat(),
             "connected": True if state.get("status") == "connected" else False,
@@ -221,6 +223,13 @@ class RobotStateManager:
                 except Exception as e:
                     logger.error(f"Error processing message timestamp: {e}")
             
+            wifi_status_text = robot.get('wifi_status', 'unknown')
+            if "Soft blocked: no" in wifi_status_text:
+                wifi_status = "on"
+            elif "Soft blocked: yes" in wifi_status_text:
+                wifi_status = "off"
+            else:
+                wifi_status = None
             disk_usage_text = robot.get('disk_usage', 'unknown')
             m = re.match(r"(\d+)%", disk_usage_text)
             disk_usage_value = int(m.group(1)) if m else -1
@@ -234,6 +243,7 @@ class RobotStateManager:
                 'images': robot.get('images', {}),
                 'env': robot.get('env', {}),
                 'system_status': robot.get('system_status', 'unknown'),  # Add system_status
+                'wifi_status': wifi_status,
                 'disk_usage': {"text": disk_usage_text, "value": disk_usage_value}
             })
         cabot_list.sort(key=lambda x: x['name'])
