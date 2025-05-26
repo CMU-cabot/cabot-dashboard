@@ -559,6 +559,11 @@ function updateDashboard(data) {
                     </div>
                     <div class="text-end">
                         <div>
+                            ${robot.wifi_status ? `
+                            <span class="badge ${robot.wifi_status == 'on' ? 'bg-success' : 'bg-danger'}">
+                                ${robot.wifi_status == 'on' ? 'wifi' : 'wifi off'}
+                            </span>
+                            ` : ''}
                             <span class="badge ${robot.connected ? 'bg-success' : 'bg-danger'}">
                                 ${robot.connected ? 'Connected' : 'Disconnected'}
                             </span>
@@ -574,10 +579,6 @@ function updateDashboard(data) {
                                 robot.disk_usage.value >= 0 ? 'bg-success' :
                                 'bg-secondary'}">
                                 ${robot.disk_usage.text}
-                            </span>
-                            <span class="badge ${robot.wifi_status == 'on' ? 'success' :
-                                robot.wifi_status == 'off' ? 'bg-danger' : 'bg-warning'}">
-                                wifi ${robot.wifi_status || ''}
                             </span>
                             <span class="badge bg-dark">
                                 ${formatDateTime(robot.last_poll, true)}
