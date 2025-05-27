@@ -569,7 +569,7 @@ function updateDashboard(data) {
                             </span>
                             <span class="badge ${robot.system_status === 'active' ? 'bg-primary' : 
                                                robot.system_status === 'failed' ? 'bg-danger' : 
-                                               robot.system_status === 'inactive' ? 'bg-warning' : 
+                                               robot.system_status === 'inactive' ? 'bg-success' :
                                                robot.system_status === 'deactivating' ? 'bg-info' : 
                                                'bg-secondary'}">
                                 ${robot.system_status ? robot.system_status.charAt(0).toUpperCase() + robot.system_status.slice(1) : 'Unknown'}
