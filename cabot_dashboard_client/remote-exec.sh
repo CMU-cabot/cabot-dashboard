@@ -28,6 +28,8 @@ case $1 in
         args="cat ~/cabot_ws/cabot/.env";;
     get-disk-usage)
         args="df -ht ext4 | tail -1 | awk '{print \$5}'";;
+    get-wifi-status)
+        args="rfkill list wifi";;
     software_update)
         ./remote-merge-env.sh $2
         scp $options -p ./host-setup.sh $CABOT_SSH_TARGET:/tmp/host-setup.sh

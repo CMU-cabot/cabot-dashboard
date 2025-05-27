@@ -71,12 +71,14 @@ async def poll(
     try:
         body = await request.json()
         system_status = body.get("cabot_system_status", "unknown")
+        wifi_status = body.get("cabot_wifi_status", "unknown")
         disk_usage = body.get("cabot_disk_usage", "unknown")
         logger.debug(f"Received poll request from {client_id} with system_status: {system_status}")
 
         state = {
             "status": "connected",
             "system_status": system_status,
+            "wifi_status": wifi_status,
             "disk_usage": disk_usage
         }
         robot_manager.update_robot_state(client_id, state)
