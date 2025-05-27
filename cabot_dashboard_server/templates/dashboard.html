@@ -68,9 +68,10 @@
                                                 </button>
                                             </div>
                                             <div class="col-4">
-                                                <button class="btn btn-primary w-100" onclick="sendCommand('report_submit','rosActionError')">
+                                                <button class="btn btn-primary w-100" onclick="sendCommand(`report_submit${atDate('report_date')}`,'rosActionError')">
                                                     <i class="bi bi-send"></i> Submit Report
                                                 </button>
+                                                <input class="w-100" type="date" id="report_date" onfocus="this.setAttribute('max', getDateString())">
                                             </div>
                                         </div>
                                         <div id="rosActionError" class="alert alert-danger mt-3" style="display: none;"></div>

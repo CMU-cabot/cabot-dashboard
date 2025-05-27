@@ -1515,3 +1515,12 @@ function loadEnvFile(fileInput) {
     };
     fileInput.value = ''; // Clear the file input
 }
+
+function getDateString(date = new Date()) {
+    return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().split('T')[0];
+}
+
+function atDate(ename) {
+    const date = document.getElementById(ename)?.value;
+    return date && `@${date}` || '';
+}
