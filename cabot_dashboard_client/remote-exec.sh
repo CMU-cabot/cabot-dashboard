@@ -14,7 +14,7 @@ case $1 in
     ros-stop)
         args="systemctl --user stop cabot";;
     report-submit)
-        args="~/cabot_ws/cabot/submit_report.sh";;
+        args="~/cabot_ws/cabot/submit_report.sh ${@:2}";;
     system-reboot)
         args="sudo systemctl reboot";;
         # want to reboot the entire system, but not implemented yet

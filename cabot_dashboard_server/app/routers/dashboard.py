@@ -154,7 +154,6 @@ async def websocket_endpoint(
                         command_mapping = {
                             'ros_start': 'ros-start',
                             'ros_stop': 'ros-stop',
-                            'report_submit': 'report-submit',
                             'power_off': 'system-poweroff',
                             'reboot': 'system-reboot',
                             'software_update': 'software_update'

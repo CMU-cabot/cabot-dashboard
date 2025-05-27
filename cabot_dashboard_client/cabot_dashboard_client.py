@@ -249,7 +249,8 @@ class CabotDashboardClient:
                 await send_status({"status": "error", "message": f"{command_name} failed: {error}"})
 
         try:
-            cmd_type = CommandType(command_type)
+            command_args = command_type.split(" ")
+            cmd_type = CommandType(command_args[0])
 
             if cmd_type == CommandType.SOFTWARE_UPDATE:
                 status_type = "software_update"
@@ -302,7 +303,7 @@ class CabotDashboardClient:
 
             else:
                 await send_status({"status": "start", "message": f"Executing {command_type}..."})
-                success, error = await self.system_command.execute([command_type])
+                success, error = await self.system_command.execute(command_args)
                 if success:
                     await send_status({"status": "success", "message": f"{command_type} completed successfully"})
                 else:

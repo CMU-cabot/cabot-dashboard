@@ -1522,5 +1522,5 @@ function getDateString(date = new Date()) {
 
 function atDate(ename) {
     const date = document.getElementById(ename)?.value;
-    return date && `@${date}` || '';
+    return date && ` ${date}` || '';
 }
