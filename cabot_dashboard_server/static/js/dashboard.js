@@ -564,7 +564,7 @@ function updateDashboard(data) {
                                 ${robot.wifi_status == 'on' ? 'wifi' : 'wifi off'}
                             </span>
                             ` : ''}
-                            <span class="badge ${robot.connected ? 'bg-success' : 'bg-danger'}">
+                            <span class="badge ${robot.connected ? 'bg-success' : 'bg-secondary'}">
                                 ${robot.connected ? 'Connected' : 'Disconnected'}
                             </span>
                             <span class="badge ${robot.system_status === 'active' ? 'bg-primary' : 
