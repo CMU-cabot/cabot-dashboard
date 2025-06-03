@@ -13,7 +13,7 @@ case $1 in
         args="systemctl --user start cabot";;
     ros-stop)
         args="systemctl --user stop cabot";;
-    report-submit)
+    submit-report)
         args="cd /opt/report-submitter && docker compose run --rm bug-report ./submit_report_local.sh ${@:2}";;
     system-reboot)
         args="sudo systemctl reboot";;
