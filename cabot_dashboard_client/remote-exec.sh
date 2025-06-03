@@ -14,7 +14,7 @@ case $1 in
     ros-stop)
         args="systemctl --user stop cabot";;
     report-submit)
-        args="cd /opt/report-submitter && docker compose run --rm log ./submit_report_local.sh ${@:2}";;
+        args="cd /opt/report-submitter && docker compose run --rm bug-report ./submit_report_local.sh ${@:2}";;
     system-reboot)
         args="sudo systemctl reboot";;
         # want to reboot the entire system, but not implemented yet
