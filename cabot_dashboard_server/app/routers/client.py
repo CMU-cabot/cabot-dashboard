@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Response, Request
-from app.dependencies import get_api_key, get_robot_state_manager, get_command_queue_manager
+from app.dependencies import get_api_key, get_robot_state_manager, get_command_queue_manager, verify_token
 from app.services.robot_state import RobotStateManager
 from app.services.command_queue import CommandQueueManager
 from typing import Dict
@@ -11,7 +11,7 @@ import json
 router = APIRouter(
     prefix="/api/client",
     tags=["client"],
-    dependencies=[Depends(get_api_key)]
+    dependencies=[Depends(get_api_key), Depends(verify_token)]
 )
 
 reconnected_clients = {}

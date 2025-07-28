@@ -1,4 +1,4 @@
-from fastapi import Depends, Cookie, HTTPException, Header
+from fastapi import Depends, Cookie, HTTPException, Header, Request
 from fastapi.security import APIKeyHeader
 from typing import Optional
 
@@ -60,3 +60,13 @@ async def verify_api_key(x_api_key: str = Header(..., alias="X-API-Key")):
             detail="Invalid API key"
         )
     return x_api_key
+
+
+async def verify_token(request: Request):
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Authorization header missing or invalid")
+
+    token = auth_header.split(" ")[1]
+    if not await auth_service.validate_token(token):
+        raise HTTPException(status_code=401, detail="Invalid token")
