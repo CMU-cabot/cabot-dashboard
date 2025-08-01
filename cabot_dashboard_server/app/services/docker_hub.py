@@ -51,7 +51,7 @@ class DockerHubService:
             return [result["name"] for result in response.json()["results"] if result['name'] in CABOT_IMAGES]
 
     async def load_image_tags(self, image_name: str, organization: str = "cmucal") -> List[str]:
-        async with httpx.AsyncClient() as client:
+        async with httpx.AsyncClient(timeout=15) as client:
             url = f"{self._base_url}/repositories/{organization}/{image_name}/tags"
             response = await client.get(url, params={"page_size": 100, "ordering": "last_updated"})
             response.raise_for_status()
