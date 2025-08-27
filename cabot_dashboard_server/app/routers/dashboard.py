@@ -11,7 +11,7 @@ from app.config import settings
 from typing import Dict, List
 from app.services.websocket import manager as websocket_manager
 from app.services.docker_hub import DockerHubService
-import json
+from operator import itemgetter
 import csv
 import io
 
@@ -204,15 +204,9 @@ async def download_csv(session_token: str = Cookie(None), auth_service: AuthServ
         raise HTTPException(status_code=401, detail="Invalid session")
 
     try:
-        cabot_list = robot_manager.get_connected_cabots_list()
-        ordered = sorted(cabot_list, key=lambda d: d.get("id", ""))
-        ids  = [d["id"]  for d in ordered]
-        envs = [d["env"] for d in ordered]
-
-        all_keys = sorted({k for env in envs for k in env})
-        rows = [["Key"] + ids] + [[k] + [env.get(k, "") for env in envs] for k in all_keys]
         output = io.StringIO()
-        csv.writer(output).writerows(rows)
+        rows = [[d["id"], k, v] for d in robot_manager.get_connected_cabots_list() for k, v in d["env"].items()]
+        csv.writer(output).writerows([["Robot id", "Key", "Value"], *sorted(rows, key=itemgetter(1, 0))])
         return StreamingResponse(iter([output.getvalue()]), media_type="text/csv")
     except Exception as e:
         logger.error(f"Unexpected error in dashboard_page: {str(e)}")
