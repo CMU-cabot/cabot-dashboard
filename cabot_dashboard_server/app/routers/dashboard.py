@@ -205,16 +205,14 @@ async def download_csv(session_token: str = Cookie(None), auth_service: AuthServ
 
     try:
         cabot_list = robot_manager.get_connected_cabots_list()
-        rows = [["Key"] + sorted([d["id"] for d in cabot_list])]
-        all_keys = set()
-        for d in cabot_list:
-            all_keys.update(k for k in d["env"].keys())
-        for k in sorted(all_keys):
-            row = [k] + [d["env"].get(k, "") for d in cabot_list]
-            rows.append(row)
+        ordered = sorted(cabot_list, key=lambda d: d.get("id", ""))
+        ids  = [d["id"]  for d in ordered]
+        envs = [d["env"] for d in ordered]
+
+        all_keys = sorted({k for env in envs for k in env})
+        rows = [["Key"] + ids] + [[k] + [env.get(k, "") for env in envs] for k in all_keys]
         output = io.StringIO()
-        writer = csv.writer(output)
-        writer.writerows(rows)
+        csv.writer(output).writerows(rows)
         return StreamingResponse(iter([output.getvalue()]), media_type="text/csv")
     except Exception as e:
         logger.error(f"Unexpected error in dashboard_page: {str(e)}")
