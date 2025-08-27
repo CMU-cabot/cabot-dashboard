@@ -122,7 +122,7 @@ async def websocket_endpoint(
             return
 
         await websocket_manager.connect(websocket)
-
+        
         # Send initial robot state
         cabot_list = robot_manager.get_connected_cabots_list()
         await websocket_manager.broadcast({
