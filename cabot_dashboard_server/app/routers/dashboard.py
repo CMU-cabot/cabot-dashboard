@@ -1,6 +1,6 @@
 import asyncio
 from fastapi import APIRouter, Depends, Request, Cookie, HTTPException, WebSocket, WebSocketDisconnect, Body
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 from app.services.auth import AuthService
 from app.services.robot_state import RobotStateManager
@@ -12,6 +12,8 @@ from typing import Dict, List
 from app.services.websocket import manager as websocket_manager
 from app.services.docker_hub import DockerHubService
 import json
+import csv
+import io
 
 router = APIRouter()
 templates = Jinja2Templates(directory="templates")
@@ -120,7 +122,7 @@ async def websocket_endpoint(
             return
 
         await websocket_manager.connect(websocket)
-        
+
         # Send initial robot state
         cabot_list = robot_manager.get_connected_cabots_list()
         await websocket_manager.broadcast({
@@ -194,3 +196,26 @@ async def websocket_endpoint(
                 websocket_manager.disconnect(websocket)
         except Exception as e:
             logger.error(f"Error during websocket cleanup: {str(e)}")
+
+
+@router.get("/download_csv")
+async def download_csv(session_token: str = Cookie(None), auth_service: AuthService = Depends(get_auth_service), robot_manager=Depends(get_robot_state_manager)):
+    if not session_token or not await auth_service.validate_token(session_token):
+        raise HTTPException(status_code=401, detail="Invalid session")
+
+    try:
+        cabot_list = robot_manager.get_connected_cabots_list()
+        rows = [["Key"] + sorted([d["id"] for d in cabot_list])]
+        all_keys = set()
+        for d in cabot_list:
+            all_keys.update(k for k in d["env"].keys())
+        for k in sorted(all_keys):
+            row = [k] + [d["env"].get(k, "") for d in cabot_list]
+            rows.append(row)
+        output = io.StringIO()
+        writer = csv.writer(output)
+        writer.writerows(rows)
+        return StreamingResponse(iter([output.getvalue()]), media_type="text/csv")
+    except Exception as e:
+        logger.error(f"Unexpected error in dashboard_page: {str(e)}")
+        return RedirectResponse(url="/login")
