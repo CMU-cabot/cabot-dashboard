@@ -226,3 +226,37 @@ source myenv/bin/activate
 pip install fastapi uvicorn websockets
 ```build
 ```
+
+## Dashboard HTTP client security update
+
+The dashboard client runs in its own Python 3.12 container; it does not change
+Python in the host or ROS containers. Its `aiohttp` dependency is pinned to
+3.14.4, the patched version for GHSA-h4cc-hm5h-fmm9, GHSA-5rmc-48h2-hvcm,
+and GHSA-xgw8-8ccx-rmqh. The FastAPI server does not use `aiohttp`, so that
+unused dependency is removed rather than changing the server's Python runtime.
+
+Run the local HTTP regression tests in an isolated Python 3.12 environment:
+
+```sh
+python3.12 -m venv .venv-client
+.venv-client/bin/python -m pip install -r cabot_dashboard_client/requirements.txt
+.venv-client/bin/python -m pip check
+.venv-client/bin/python -m unittest discover -s tests -v
+```
+
+These tests use a loopback HTTP server and dummy credentials. They exercise
+client authentication, connection, compressed JSON polling, status submission,
+token refresh and timeouts without contacting a robot or executing commands.
+They do not replace image-build or deployment verification.
+
+Changing requirements does not update running containers. Before rollout:
+
+- Build and validate both dashboard images for the required `linux/amd64` and
+  `linux/arm64` platforms.
+- Publish a new release tag and update the corresponding server/client containers;
+  clients using `CABOT_LAUNCH_IMAGE_TAG` need that tag updated explicitly.
+- Verify the running client image's Python and `aiohttp` versions and confirm that
+  the server environment no longer contains `aiohttp`.
+- Check authentication, polling, status display and reconnection in a safe test
+  environment before updating robots. Do not use robot control commands as a
+  smoke test.
